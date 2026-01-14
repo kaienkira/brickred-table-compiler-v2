@@ -12,16 +12,37 @@ type TableDescriptor struct {
 	GlobalStructs []*StructDef
 	// StructDef.Name -> StructDef
 	GlobalStructNameIndex map[string]*StructDef
+
+	// table define
+	// in file define order
+	Tables []*TableDef
+	// TableDef.Name -> TableDef
+	TableNameIndex map[string]*TableDef
 }
 
 func NewTableDescriptor() *TableDescriptor {
 	newObj := new(TableDescriptor)
 	newObj.Readers = make(map[string]*ReaderDef)
+	newObj.GlobalStructs = make([]*StructDef, 0)
+	newObj.GlobalStructNameIndex = make(map[string]*StructDef)
+	newObj.Tables = make([]*TableDef, 0)
+	newObj.TableNameIndex = make(map[string]*TableDef)
 
 	return newObj
 }
 
 func (this *TableDescriptor) Close() {
+	if this.TableNameIndex != nil {
+		clear(this.TableNameIndex)
+		this.TableNameIndex = nil
+	}
+	if this.Tables != nil {
+		for _, def := range this.Tables {
+			def.Close()
+		}
+		clear(this.Tables)
+		this.Tables = nil
+	}
 	if this.GlobalStructNameIndex != nil {
 		clear(this.GlobalStructNameIndex)
 		this.GlobalStructNameIndex = nil
