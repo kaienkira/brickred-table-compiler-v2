@@ -20,8 +20,9 @@ type TableDescriptor struct {
 	TableNameIndex map[string]*TableDef
 }
 
-func NewTableDescriptor() *TableDescriptor {
+func NewTableDescriptor(filePath string) *TableDescriptor {
 	newObj := new(TableDescriptor)
+	newObj.FilePath = filePath
 	newObj.Readers = make(map[string]*ReaderDef)
 	newObj.GlobalStructs = make([]*StructDef, 0)
 	newObj.GlobalStructNameIndex = make(map[string]*StructDef)

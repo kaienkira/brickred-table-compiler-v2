@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	. "github.com/kaienkira/brickred-table-compiler-v2/compiler/internal"
-	flag "github.com/spf13/pflag"
 	"os"
 	"path/filepath"
+
+	. "github.com/kaienkira/brickred-table-compiler-v2/compiler/internal"
+	flag "github.com/spf13/pflag"
 )
 
 func printUsage() {
