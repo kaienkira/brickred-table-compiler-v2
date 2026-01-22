@@ -69,6 +69,26 @@ func (this *TableParser) Parse(defineFilePath string) bool {
 		}
 	}
 
+	// parse global structs
+	{
+		nodes := xmlquery.Find(rootNode, "/struct")
+		for _, node := range nodes {
+			if this.addStructDef(nil, node) == false {
+				return false
+			}
+		}
+	}
+
+	// parse tables
+	{
+		nodes := xmlquery.Find(rootNode, "/table")
+		for _, node := range nodes {
+			if this.addTableDef(node) == false {
+				return false
+			}
+		}
+	}
+
 	return true
 }
 
@@ -179,5 +199,140 @@ func (this *TableParser) addReaderDef(node *xmlquery.Node) bool {
 
 	this.Descriptor.Readers[def.Name] = def
 
+	return true
+}
+
+func (this *TableParser) addStructDef(
+	tableDef *TableDef, node *xmlquery.Node) bool {
+
+	// check name attr
+	var name string
+	{
+		attr := this.getNodeAttr(node, "name")
+		if attr == nil {
+			this.printNodeError(node,
+				"`struct` node must contain a `name` attribute")
+			return false
+		}
+		name = attr.Value
+	}
+	if this.isStrValidVarName(name) == false {
+		this.printNodeError(node,
+			"`struct` node `name` attribute is invalid")
+		return false
+	}
+	if tableDef == nil {
+		ok := false
+		if _, ok = this.Descriptor.GlobalStructNameIndex[name]; ok == false {
+			_, ok = this.Descriptor.TableNameIndex[name]
+		}
+		if ok {
+			this.printNodeError(node,
+				"`struct` node `name` attribute duplicated")
+			return false
+		}
+	} else {
+		if _, ok := tableDef.LocalStructNameIndex[name]; ok {
+			this.printNodeError(node,
+				"`struct` node `name` attribute duplicated")
+			return false
+		}
+		if name == "Row" ||
+			name == "Rows" ||
+			name == "RowSet" ||
+			name == "RowSets" {
+			this.printNodeError(node, ""+
+				"local struct can not be named as "+
+				"`Row`, `Rows`, `RowSet` or `RowSets`")
+			return false
+		}
+	}
+
+	def := NewStructDef(tableDef, name, node.LineNumber)
+
+	// parse fields
+	for _, childNode := range node.ChildNodes() {
+		if childNode.Type != xmlquery.ElementNode {
+			continue
+		}
+		if childNode.Data != "field" {
+			this.printNodeError(childNode,
+				"expect a `field` node")
+			return false
+		}
+
+		if this.addStructFieldDef(def, childNode) == false {
+			return false
+		}
+	}
+
+	if tableDef == nil {
+		this.Descriptor.GlobalStructs =
+			append(this.Descriptor.GlobalStructs, def)
+		this.Descriptor.GlobalStructNameIndex[def.Name] = def
+	} else {
+		tableDef.LocalStructs = append(tableDef.LocalStructs, def)
+		tableDef.LocalStructNameIndex[def.Name] = def
+	}
+
+	return true
+}
+
+func (this *TableParser) addStructFieldDef(
+	structDef *StructDef, node *xmlquery.Node) bool {
+
+	// check name attr
+	var name string
+	{
+		attr := this.getNodeAttr(node, "name")
+		if attr == nil {
+			this.printNodeError(node,
+				"`field` node must contain a `name` attribute")
+			return false
+		}
+		name = attr.Value
+	}
+	if this.isStrValidVarName(name) == false {
+		this.printNodeError(node,
+			"`field` node `name` attribute is invalid")
+		return false
+	}
+	if _, ok := structDef.FieldNameIndex[name]; ok {
+		this.printNodeError(node,
+			"`field` node `name` attribute duplicated")
+		return false
+	}
+
+	// check type attr
+	var typ string
+	{
+		attr := this.getNodeAttr(node, "type")
+		if attr == nil {
+			this.printNodeError(node,
+				"`field` node must contain a `type` attribute")
+			return false
+		}
+		typ = attr.Value
+	}
+
+	def := NewStructFieldDef(structDef, name, node.LineNumber)
+
+	if typ == "int" {
+		def.Type = StructFieldType_Int
+	} else if typ == "string" {
+		def.Type = StructFieldType_String
+	} else {
+		this.printNodeError(node,
+			"type `%s` is invalid", typ)
+		return false
+	}
+
+	structDef.Fields = append(structDef.Fields, def)
+	structDef.FieldNameIndex[def.Name] = def
+
+	return true
+}
+
+func (this *TableParser) addTableDef(node *xmlquery.Node) bool {
 	return true
 }
