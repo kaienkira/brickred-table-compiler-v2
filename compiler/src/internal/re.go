@@ -5,3 +5,4 @@ import (
 )
 
 var g_isVarNameRegexp *regexp.Regexp = regexp.MustCompile(`^[a-zA-Z_]\w*$`)
+var g_fetchListTypeRegexp *regexp.Regexp = regexp.MustCompile(`^list{(.+)}$`)

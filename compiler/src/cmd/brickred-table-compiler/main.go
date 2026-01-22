@@ -91,6 +91,9 @@ func main() {
 
 	// create parser
 	parser := NewTableParser()
+	if parser.Parse(optDefineFilePath) == false {
+		os.Exit(1)
+	}
 	defer parser.Close()
 
 	os.Exit(0)

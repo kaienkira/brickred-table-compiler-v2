@@ -17,7 +17,7 @@ cd "$test_dir"
 if [ $? -ne 0 ]; then exit 1; fi
 
 # copy files
-mv "$script_path"/../compiler/bin/brickred-table-compiler .
+cp "$script_path"/../compiler/bin/brickred-table-compiler .
 if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/table.xml .
 if [ $? -ne 0 ]; then exit 1; fi
