@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func UtilGetFullPath(filePath string) string {
@@ -49,4 +50,12 @@ func UtilWriteAllText(filePath string, fileContent string) bool {
 	}
 
 	return true
+}
+
+func UtilCamelToUnderscore(camelName string) string {
+	ret := g_camelToUnderscoreCase1Regexp.ReplaceAllString(camelName, "${1}_${2}")
+	ret = g_camelToUnderscoreCase2Regexp.ReplaceAllString(ret, "${1}_${2}")
+	ret = strings.ToLower(ret)
+
+	return ret
 }

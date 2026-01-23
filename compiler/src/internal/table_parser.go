@@ -159,6 +159,32 @@ func (this *TableParser) FilterByReader(reader string) bool {
 		}
 	}
 
+	// remove unused global structs
+	filteredGlobalStructs := make([]*StructDef, 0)
+	for _, structDef := range this.Descriptor.GlobalStructs {
+		if _, ok := usedStructs[structDef]; ok {
+			filteredGlobalStructs = append(filteredGlobalStructs, structDef)
+		} else {
+			delete(this.Descriptor.GlobalStructNameIndex, structDef.Name)
+			structDef.Close()
+		}
+	}
+	this.Descriptor.GlobalStructs = filteredGlobalStructs
+
+	// remove unused local structs
+	for _, tableDef := range this.Descriptor.Tables {
+		filteredLocalStructs := make([]*StructDef, 0)
+		for _, structDef := range tableDef.LocalStructs {
+			if _, ok := usedStructs[structDef]; ok {
+				filteredLocalStructs = append(filteredLocalStructs, structDef)
+			} else {
+				delete(tableDef.LocalStructNameIndex, structDef.Name)
+				structDef.Close()
+			}
+		}
+		tableDef.LocalStructs = filteredLocalStructs
+	}
+
 	return true
 }
 

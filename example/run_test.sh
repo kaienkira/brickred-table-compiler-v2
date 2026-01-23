@@ -23,4 +23,4 @@ cp "$script_path"/table.xml .
 if [ $? -ne 0 ]; then exit 1; fi
 
 # cpp test
-./brickred-table-compiler -f table.xml -l cpp
+./brickred-table-compiler -f table.xml -l cpp -r server
