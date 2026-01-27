@@ -171,6 +171,7 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImpl(
 	sb *strings.Builder, structDef *StructDef) {
 
 	this.writeSourceFileOneStructImplConstructor(sb, structDef)
+	this.writeSourceFileOneStructImplDestructor(sb, structDef)
 }
 
 func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
@@ -219,6 +220,19 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
 		}
 	}
 
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeSourceFileOneStructImplDestructor(
+	sb *strings.Builder, structDef *StructDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s::~%s()",
+		structDef.Name, structDef.Name)
 	this.writeLine(sb,
 		"{")
 	this.writeLine(sb,
