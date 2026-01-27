@@ -44,6 +44,20 @@ func (this *CppCodeGenerator) Generate(
 	return true
 }
 
+func (this *CppCodeGenerator) getStructFieldCppType(
+	fieldDef *StructFieldDef) string {
+
+	cppType := ""
+
+	if fieldDef.Type == StructFieldType_Int {
+		cppType = "int32_t"
+	} else if fieldDef.Type == StructFieldType_String {
+		cppType = "std::string"
+	}
+
+	return cppType
+}
+
 func (this *CppCodeGenerator) generateGlobalStructHeaderFile(
 	structDef *StructDef) string {
 
@@ -51,7 +65,9 @@ func (this *CppCodeGenerator) generateGlobalStructHeaderFile(
 
 	this.writeDontEditComment(&sb)
 	this.writeGlobalStructHeaderFileIncludeGuardStart(&sb, structDef)
+	this.writeGlobalStructHeaderFileIncludeFileDecl(&sb, structDef)
 	this.writeNamespaceDeclStart(&sb)
+	this.writeHeaderFileOneStructDecl(&sb, structDef)
 	this.writeNamespaceDeclEnd(&sb)
 	this.writeGlobalStructHeaderFileIncludeGuardEnd(&sb)
 
@@ -64,7 +80,9 @@ func (this *CppCodeGenerator) generateGlobalStructSourceFile(
 	var sb strings.Builder
 
 	this.writeDontEditComment(&sb)
+	this.writeGlobalStructSourceFileIncludeFileDecl(&sb, structDef)
 	this.writeNamespaceDeclStart(&sb)
+	this.writeSourceFileOneStructImpl(&sb, structDef)
 	this.writeNamespaceDeclEnd(&sb)
 
 	return sb.String()
@@ -113,6 +131,100 @@ func (this *CppCodeGenerator) writeNamespaceDeclEnd(
 		namespaceName)
 }
 
+func (this *CppCodeGenerator) writeHeaderFileOneStructDecl(
+	sb *strings.Builder, structDef *StructDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"class %s {",
+		structDef.Name)
+	this.writeLine(sb,
+		"public:")
+	this.writeLineFormat(sb,
+		"    %s();",
+		structDef.Name)
+	this.writeLineFormat(sb,
+		"    ~%s();",
+		structDef.Name)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"    bool parse(const std::string &text);")
+
+	if len(structDef.Fields) > 0 {
+		this.writeEmptyLine(sb)
+		this.writeLine(sb,
+			"public:")
+
+		for _, def := range structDef.Fields {
+			cppType := this.getStructFieldCppType(def)
+			this.writeLineFormat(sb,
+				"    %s %s;",
+				cppType, def.Name)
+		}
+	}
+
+	this.writeLine(sb,
+		"};")
+}
+
+func (this *CppCodeGenerator) writeSourceFileOneStructImpl(
+	sb *strings.Builder, structDef *StructDef) {
+
+	this.writeSourceFileOneStructImplConstructor(sb, structDef)
+}
+
+func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
+	sb *strings.Builder, structDef *StructDef) {
+
+	hasInitList := false
+	lastInitListFieldIndex := -1
+
+	for i, def := range structDef.Fields {
+		if def.Type == StructFieldType_String {
+			continue
+		}
+		hasInitList = true
+		lastInitListFieldIndex = i
+	}
+
+	this.writeEmptyLine(sb)
+	if hasInitList {
+		this.writeLineFormat(sb,
+			"%s::%s() :",
+			structDef.Name, structDef.Name)
+	} else {
+		this.writeLineFormat(sb,
+			"%s::%s()",
+			structDef.Name, structDef.Name)
+	}
+
+	if hasInitList {
+		for i, def := range structDef.Fields {
+			var defaultValue string
+			if def.Type == StructFieldType_Int {
+				defaultValue = "0"
+			} else {
+				continue
+			}
+
+			if i == lastInitListFieldIndex {
+				this.writeLineFormat(sb,
+					"    %s(%s)",
+					def.Name, defaultValue)
+			} else {
+				this.writeLineFormat(sb,
+					"    %s(%s),",
+					def.Name, defaultValue)
+			}
+		}
+	}
+
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
+}
+
 func (this *CppCodeGenerator) writeGlobalStructHeaderFileIncludeGuardStart(
 	sb *strings.Builder, structDef *StructDef) {
 
@@ -143,4 +255,35 @@ func (this *CppCodeGenerator) writeGlobalStructHeaderFileIncludeGuardEnd(
 	this.writeEmptyLine(sb)
 	this.writeLine(sb,
 		"#endif")
+}
+
+func (this *CppCodeGenerator) writeGlobalStructHeaderFileIncludeFileDecl(
+	sb *strings.Builder, structDef *StructDef) {
+
+	useCStdIntH := false
+
+	for _, def := range structDef.Fields {
+		if def.Type == StructFieldType_Int {
+			useCStdIntH = true
+		}
+	}
+
+	this.writeEmptyLine(sb)
+	if useCStdIntH {
+		this.writeLine(sb,
+			"#include <cstdint>")
+	}
+	this.writeLine(sb,
+		"#include <string>")
+}
+
+func (this *CppCodeGenerator) writeGlobalStructSourceFileIncludeFileDecl(
+	sb *strings.Builder, structDef *StructDef) {
+
+	this.writeLineFormat(sb,
+		"#include \"%s.h\"",
+		UtilCamelToUnderscore(structDef.Name))
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"#include <brickred/table/column_spliter.h>")
 }
