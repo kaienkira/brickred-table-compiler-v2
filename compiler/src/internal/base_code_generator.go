@@ -7,13 +7,16 @@ import (
 
 type BaseCodeGenerator struct {
 	descriptor *TableDescriptor
+	reader     string
 	newLineStr string
 }
 
 func (this *BaseCodeGenerator) init(
-	descriptor *TableDescriptor, newLineType NewLineType) {
+	descriptor *TableDescriptor,
+	reader string, newLineType NewLineType) {
 
 	this.descriptor = descriptor
+	this.reader = reader
 	if newLineType == NewLineType_Dos {
 		this.newLineStr = "\r\n"
 	} else {

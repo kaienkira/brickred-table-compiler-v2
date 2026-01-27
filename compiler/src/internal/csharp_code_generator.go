@@ -16,9 +16,9 @@ func (this *CSharpCodeGenerator) Close() {
 
 func (this *CSharpCodeGenerator) Generate(
 	descriptor *TableDescriptor,
-	outputDir string, newLineType NewLineType) bool {
+	reader string, outputDir string, newLineType NewLineType) bool {
 
-	this.init(descriptor, newLineType)
+	this.init(descriptor, reader, newLineType)
 
 	return true
 }

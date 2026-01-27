@@ -11,5 +11,5 @@ const (
 type CodeGenerator interface {
 	Close()
 	Generate(descriptor *TableDescriptor,
-		outputDir string, newLineType NewLineType) bool
+		reader string, outputDir string, newLineType NewLineType) bool
 }

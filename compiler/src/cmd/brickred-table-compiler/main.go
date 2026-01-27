@@ -118,7 +118,7 @@ func main() {
 		newLineType = NewLineType_Dos
 	}
 	if generator.Generate(parser.Descriptor,
-		optOutputDir, newLineType) == false {
+		optReader, optOutputDir, newLineType) == false {
 		os.Exit(1)
 	}
 
