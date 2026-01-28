@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -172,6 +173,7 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImpl(
 
 	this.writeSourceFileOneStructImplConstructor(sb, structDef)
 	this.writeSourceFileOneStructImplDestructor(sb, structDef)
+	this.writeSourceFileOneStructImplParseFunc(sb, structDef)
 }
 
 func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
@@ -188,15 +190,20 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
 		lastInitListFieldIndex = i
 	}
 
+	parentClassPrefix := ""
+	if structDef.ParentRef != nil {
+		parentClassPrefix = fmt.Sprintf("%s::", structDef.ParentRef.Name)
+	}
+
 	this.writeEmptyLine(sb)
 	if hasInitList {
 		this.writeLineFormat(sb,
-			"%s::%s() :",
-			structDef.Name, structDef.Name)
+			"%s%s::%s() :",
+			parentClassPrefix, structDef.Name, structDef.Name)
 	} else {
 		this.writeLineFormat(sb,
-			"%s::%s()",
-			structDef.Name, structDef.Name)
+			"%s%s::%s()",
+			parentClassPrefix, structDef.Name, structDef.Name)
 	}
 
 	if hasInitList {
@@ -229,12 +236,75 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
 func (this *CppCodeGenerator) writeSourceFileOneStructImplDestructor(
 	sb *strings.Builder, structDef *StructDef) {
 
+	parentClassPrefix := ""
+	if structDef.ParentRef != nil {
+		parentClassPrefix = fmt.Sprintf("%s::", structDef.ParentRef.Name)
+	}
+
 	this.writeEmptyLine(sb)
 	this.writeLineFormat(sb,
-		"%s::~%s()",
-		structDef.Name, structDef.Name)
+		"%s%s::~%s()",
+		parentClassPrefix, structDef.Name, structDef.Name)
 	this.writeLine(sb,
 		"{")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeSourceFileOneStructImplParseFunc(
+	sb *strings.Builder, structDef *StructDef) {
+
+	parentClassPrefix := ""
+	if structDef.ParentRef != nil {
+		parentClassPrefix = fmt.Sprintf("%s::", structDef.ParentRef.Name)
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"bool %s%s::parse(const std::string &text)",
+		parentClassPrefix, structDef.Name)
+	this.writeLine(sb,
+		"{")
+
+	if len(structDef.Fields) <= 0 {
+		this.writeLine(sb,
+			"    return true;")
+	} else {
+		this.writeLine(sb,
+			"    brickred::table::ColumnSpliter s(text, ';');")
+		this.writeEmptyLine(sb)
+
+		for _, def := range structDef.Fields {
+			if def.Type == StructFieldType_Int {
+				this.writeLineFormat(sb,
+					"    if (s.nextInt(&this->%s) == false) {",
+					def.Name)
+				this.writeLine(sb,
+					"        return false;")
+				this.writeLine(sb,
+					"    }")
+			} else if def.Type == StructFieldType_String {
+				this.writeLineFormat(sb,
+					"    if (s.nextString(&this->%s) == false) {",
+					def.Name)
+				this.writeLine(sb,
+					"        return false;")
+				this.writeLine(sb,
+					"    }")
+			}
+		}
+
+		this.writeLine(sb,
+			"    if (s.nextString(nullptr)) {")
+		this.writeLine(sb,
+			"        return false;")
+		this.writeLine(sb,
+			"    }")
+		this.writeEmptyLine(sb)
+		this.writeLine(sb,
+			"    return true;")
+	}
+
 	this.writeLine(sb,
 		"}")
 }
@@ -258,8 +328,7 @@ func (this *CppCodeGenerator) writeGlobalStructHeaderFileIncludeGuardStart(
 	this.writeLineFormat(sb,
 		"#ifndef %s",
 		guardName)
-	this.writeLineFormat(sb,
-		"#define %s",
+	this.writeLineFormat(sb, "#define %s",
 		guardName)
 }
 
