@@ -153,7 +153,9 @@ func (this *CppCodeGenerator) generateTableSourceFile(
 	var sb strings.Builder
 
 	this.writeDontEditComment(&sb)
+	this.writeTableSourceFileIncludeFileDecl(&sb, tableDef)
 	this.writeNamespaceDeclStart(&sb)
+	this.writeTableSourceFileTableImpl(&sb, tableDef)
 	this.writeNamespaceDeclEnd(&sb)
 
 	return sb.String()
@@ -266,11 +268,10 @@ func (this *CppCodeGenerator) writeSourceFileOneStructImplConstructor(
 	lastInitListFieldIndex := -1
 
 	for i, def := range structDef.Fields {
-		if def.Type == StructFieldType_String {
-			continue
+		if def.Type == StructFieldType_Int {
+			hasInitList = true
+			lastInitListFieldIndex = i
 		}
-		hasInitList = true
-		lastInitListFieldIndex = i
 	}
 
 	parentClassPrefix := ""
@@ -560,6 +561,9 @@ func (this *CppCodeGenerator) writeTableHeaderFileTableDecl(
 	}
 	this.writeTableHeaderFileTableDeclRowClassDecl(sb, tableDef)
 	this.writeEmptyLine(sb)
+	this.writeTableHeaderFileTableDeclFuncDecl(sb, tableDef)
+	this.writeEmptyLine(sb)
+	this.writeTableHeaderFileTableDeclMemberDecl(sb, tableDef)
 
 	this.writeLine(sb,
 		"};")
@@ -589,4 +593,216 @@ func (this *CppCodeGenerator) writeTableHeaderFileTableDeclRowClassDecl(
 
 	this.writeLine(sb,
 		"    };")
+
+	this.writeEmptyLine(sb)
+
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeLine(sb,
+			"    using Rows = std::vector<Row>;")
+		this.writeLineFormat(sb,
+			"    using RowIndex = std::unordered_map<%s, const Row *>;",
+			this.getTableColumnCppType(tableDef.TableKey))
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeLine(sb,
+			"    using RowSet = std::vector<Row>;")
+		this.writeLine(sb,
+			"    using RowSets = std::vector<RowSet>;")
+		this.writeLineFormat(sb,
+			"    using RowSetIndex = std::unordered_map<%s, const RowSet *>;",
+			this.getTableColumnCppType(tableDef.TableKey))
+	}
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileTableDeclFuncDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeLineFormat(sb,
+		"    %s();",
+		tableDef.Name)
+	this.writeLineFormat(sb,
+		"    ~%s();",
+		tableDef.Name)
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    bool parse(const std::string &text, std::string *error_info);")
+
+	cppType := this.getTableColumnCppType(tableDef.TableKey)
+	if tableDef.TableKey.Type == TableColumnType_String {
+		cppType = fmt.Sprintf("const %s &", cppType)
+	} else {
+		cppType = fmt.Sprintf("%s ", cppType)
+	}
+
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeLineFormat(sb,
+			"    const Row *getRow(%skey) const;",
+			cppType)
+		this.writeLine(sb,
+			"    const Rows &getRows() const { return rows_; }")
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeLineFormat(sb,
+			"    const RowSet *getRowSet(%skey) const;",
+			cppType)
+		this.writeLine(sb,
+			"    const RowSets &getRowSets() const { return row_sets_; }")
+	}
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileTableDeclMemberDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeLine(sb,
+		"private:")
+
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeLine(sb,
+			"    Rows rows_;")
+		this.writeLine(sb,
+			"    RowIndex row_index_;")
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeLine(sb,
+			"    RowSets row_sets_;")
+		this.writeLine(sb,
+			"    RowSetIndex row_set_index_;")
+	}
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileIncludeFileDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	useCStdlibH := false
+	useBrickredTableColumnSpliterH := false
+
+	for _, def := range tableDef.Columns {
+		if def.Type == TableColumnType_Int {
+			useCStdlibH = true
+		} else if def.Type == TableColumnType_Struct ||
+			def.Type == TableColumnType_List {
+			useBrickredTableColumnSpliterH = true
+		}
+	}
+
+	this.writeLineFormat(sb,
+		"#include \"%s.h\"",
+		UtilCamelToUnderscore(tableDef.Name))
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"#include <cstddef>")
+	if useCStdlibH {
+		this.writeLine(sb,
+			"#include <cstdlib>")
+	}
+
+	this.writeEmptyLine(sb)
+	if useBrickredTableColumnSpliterH {
+		this.writeLine(sb,
+			"#include <brickred/table/column_spliter.h>")
+	}
+	this.writeLine(sb,
+		"#include <brickred/table/line_reader.h>")
+	this.writeLine(sb,
+		"#include <brickred/table/util.h>")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImpl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	for _, def := range tableDef.LocalStructs {
+		this.writeSourceFileOneStructImpl(sb, def)
+	}
+	this.writeTableSourceFileTableImplRowConstructor(sb, tableDef)
+	this.writeTableSourceFileTableImplRowDestructor(sb, tableDef)
+	this.writeTableSourceFileTableImplConstructor(sb, tableDef)
+	this.writeTableSourceFileTableImplDestructor(sb, tableDef)
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplRowConstructor(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	hasInitList := false
+	lastInitListFieldIndex := -1
+
+	for i, def := range tableDef.Columns {
+		if def.Type == TableColumnType_Int {
+			hasInitList = true
+			lastInitListFieldIndex = i
+		}
+	}
+
+	this.writeEmptyLine(sb)
+	if hasInitList {
+		this.writeLineFormat(sb,
+			"%s::Row::Row() :",
+			tableDef.Name)
+	} else {
+		this.writeLineFormat(sb,
+			"%s::Row::Row()",
+			tableDef.Name)
+	}
+
+	if hasInitList {
+		for i, def := range tableDef.Columns {
+			var defaultValue string
+			if def.Type == TableColumnType_Int {
+				defaultValue = "0"
+			} else {
+				continue
+			}
+
+			if i == lastInitListFieldIndex {
+				this.writeLineFormat(sb,
+					"    %s(%s)",
+					def.Name, defaultValue)
+			} else {
+				this.writeLineFormat(sb,
+					"    %s(%s),",
+					def.Name, defaultValue)
+			}
+		}
+	}
+
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplRowDestructor(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s::Row::~Row()",
+		tableDef.Name)
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplConstructor(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s::%s()",
+		tableDef.Name, tableDef.Name)
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplDestructor(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s::~%s()",
+		tableDef.Name, tableDef.Name)
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"}")
 }

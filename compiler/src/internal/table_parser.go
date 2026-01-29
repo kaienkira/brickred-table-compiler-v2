@@ -335,11 +335,14 @@ func (this *TableParser) addStructDef(
 		}
 		if name == "Row" ||
 			name == "Rows" ||
+			name == "RowIndex" ||
 			name == "RowSet" ||
-			name == "RowSets" {
+			name == "RowSets" ||
+			name == "RowSetIndex" {
 			this.printNodeError(node, ""+
 				"local struct can not be named as "+
-				"`Row`, `Rows`, `RowSet` or `RowSets`")
+				"`Row`, `Rows`, `RowIndex`, "+
+				"`RowSet`, `RowSets` or `RowSetIndex`")
 			return false
 		}
 	}
