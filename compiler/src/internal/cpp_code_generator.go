@@ -3,6 +3,7 @@ package lib
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -42,6 +43,22 @@ func (this *CppCodeGenerator) Generate(
 		}
 	}
 
+	for _, def := range this.descriptor.Tables {
+		underscoreName := UtilCamelToUnderscore(def.Name)
+
+		headerFilePath := filepath.Join(outputDir, underscoreName+".h")
+		headerFileContent := this.generateTableHeaderFile(def)
+		if UtilWriteAllText(headerFilePath, headerFileContent) == false {
+			return false
+		}
+
+		sourceFilePath := filepath.Join(outputDir, underscoreName+".cc")
+		sourceFileContent := this.generateTableSourceFile(def)
+		if UtilWriteAllText(sourceFilePath, sourceFileContent) == false {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -49,7 +66,6 @@ func (this *CppCodeGenerator) getStructFieldCppType(
 	fieldDef *StructFieldDef) string {
 
 	cppType := ""
-
 	if fieldDef.Type == StructFieldType_Int {
 		cppType = "int32_t"
 	} else if fieldDef.Type == StructFieldType_String {
@@ -57,6 +73,32 @@ func (this *CppCodeGenerator) getStructFieldCppType(
 	}
 
 	return cppType
+}
+
+func (this *CppCodeGenerator) getTableColumnCppType(
+	columnDef *TableColumnDef) string {
+
+	var checkType TableColumnType
+	if columnDef.Type == TableColumnType_List {
+		checkType = columnDef.ListType
+	} else {
+		checkType = columnDef.Type
+	}
+
+	cppType := ""
+	if checkType == TableColumnType_Int {
+		cppType = "int32_t"
+	} else if checkType == TableColumnType_String {
+		cppType = "std::string"
+	} else if checkType == TableColumnType_Struct {
+		cppType = columnDef.RefStructDef.Name
+	}
+
+	if columnDef.Type == TableColumnType_List {
+		return fmt.Sprintf("std::vector<%s>", cppType)
+	} else {
+		return cppType
+	}
 }
 
 func (this *CppCodeGenerator) generateGlobalStructHeaderFile(
@@ -84,6 +126,34 @@ func (this *CppCodeGenerator) generateGlobalStructSourceFile(
 	this.writeGlobalStructSourceFileIncludeFileDecl(&sb, structDef)
 	this.writeNamespaceDeclStart(&sb)
 	this.writeSourceFileOneStructImpl(&sb, structDef)
+	this.writeNamespaceDeclEnd(&sb)
+
+	return sb.String()
+}
+
+func (this *CppCodeGenerator) generateTableHeaderFile(
+	tableDef *TableDef) string {
+
+	var sb strings.Builder
+
+	this.writeDontEditComment(&sb)
+	this.writeTableHeaderFileIncludeGuardStart(&sb, tableDef)
+	this.writeTableHeaderFileIncludeFileDecl(&sb, tableDef)
+	this.writeNamespaceDeclStart(&sb)
+	this.writeTableHeaderFileTableDecl(&sb, tableDef)
+	this.writeNamespaceDeclEnd(&sb)
+	this.writeTableHeaderFileIncludeGuardEnd(&sb)
+
+	return sb.String()
+}
+
+func (this *CppCodeGenerator) generateTableSourceFile(
+	tableDef *TableDef) string {
+
+	var sb strings.Builder
+
+	this.writeDontEditComment(&sb)
+	this.writeNamespaceDeclStart(&sb)
 	this.writeNamespaceDeclEnd(&sb)
 
 	return sb.String()
@@ -135,37 +205,50 @@ func (this *CppCodeGenerator) writeNamespaceDeclEnd(
 func (this *CppCodeGenerator) writeHeaderFileOneStructDecl(
 	sb *strings.Builder, structDef *StructDef) {
 
+	var indent string
+	if structDef.ParentRef == nil {
+		indent = ""
+	} else {
+		indent = "    "
+	}
+
+	if structDef.ParentRef == nil {
+		this.writeEmptyLine(sb)
+	}
+	this.writeLineFormat(sb,
+		"%sclass %s {",
+		indent, structDef.Name)
+	this.writeLineFormat(sb,
+		"%spublic:",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    %s();",
+		indent, structDef.Name)
+	this.writeLineFormat(sb,
+		"%s    ~%s();",
+		indent, structDef.Name)
 	this.writeEmptyLine(sb)
 	this.writeLineFormat(sb,
-		"class %s {",
-		structDef.Name)
-	this.writeLine(sb,
-		"public:")
-	this.writeLineFormat(sb,
-		"    %s();",
-		structDef.Name)
-	this.writeLineFormat(sb,
-		"    ~%s();",
-		structDef.Name)
-	this.writeEmptyLine(sb)
-	this.writeLineFormat(sb,
-		"    bool parse(const std::string &text);")
+		"%s    bool parse(const std::string &text);",
+		indent)
 
 	if len(structDef.Fields) > 0 {
 		this.writeEmptyLine(sb)
-		this.writeLine(sb,
-			"public:")
+		this.writeLineFormat(sb,
+			"%spublic:",
+			indent)
 
 		for _, def := range structDef.Fields {
 			cppType := this.getStructFieldCppType(def)
 			this.writeLineFormat(sb,
-				"    %s %s;",
-				cppType, def.Name)
+				"%s    %s %s;",
+				indent, cppType, def.Name)
 		}
 	}
 
-	this.writeLine(sb,
-		"};")
+	this.writeLineFormat(sb,
+		"%s};",
+		indent)
 }
 
 func (this *CppCodeGenerator) writeSourceFileOneStructImpl(
@@ -369,4 +452,141 @@ func (this *CppCodeGenerator) writeGlobalStructSourceFileIncludeFileDecl(
 	this.writeEmptyLine(sb)
 	this.writeLine(sb,
 		"#include <brickred/table/column_spliter.h>")
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileIncludeGuardStart(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	guardNameParts := make([]string, 0)
+	guardNameParts = append(guardNameParts, "BRICKRED_TABLE_GENERATED")
+	readerDef, ok := this.descriptor.Readers[this.reader]
+	if ok {
+		guardNameParts = append(
+			guardNameParts, readerDef.NamespaceParts...)
+	}
+	guardNameParts = append(guardNameParts,
+		g_notWordRegexp.ReplaceAllString(
+			UtilCamelToUnderscore(tableDef.Name), "_"))
+	guardNameParts = append(guardNameParts, "H")
+	guardName := strings.ToUpper(strings.Join(guardNameParts, "_"))
+
+	this.writeLineFormat(sb,
+		"#ifndef %s",
+		guardName)
+	this.writeLineFormat(sb, "#define %s",
+		guardName)
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileIncludeGuardEnd(
+	sb *strings.Builder) {
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"#endif")
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileIncludeFileDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	useCStdIntH := false
+	refStructDefs := make([]*StructDef, 0)
+
+	for _, columnDef := range tableDef.Columns {
+		var checkType TableColumnType
+		if columnDef.Type == TableColumnType_List {
+			checkType = columnDef.ListType
+		} else {
+			checkType = columnDef.Type
+		}
+
+		if checkType == TableColumnType_Int {
+			useCStdIntH = true
+		} else if checkType == TableColumnType_Struct {
+			def := columnDef.RefStructDef
+			if def == nil {
+				continue
+			}
+			if def.ParentRef != nil {
+				continue
+			}
+			if slices.Contains(refStructDefs, def) {
+				continue
+			}
+			refStructDefs = append(refStructDefs, def)
+		}
+	}
+
+	for _, structDef := range tableDef.LocalStructs {
+		for _, def := range structDef.Fields {
+			if def.Type == StructFieldType_Int {
+				useCStdIntH = true
+			}
+		}
+	}
+
+	this.writeEmptyLine(sb)
+	if useCStdIntH {
+		this.writeLine(sb,
+			"#include <cstdint>")
+	}
+	this.writeLine(sb,
+		"#include <string>")
+	this.writeLine(sb,
+		"#include <unordered_map>")
+	this.writeLine(sb,
+		"#include <vector>")
+
+	this.writeEmptyLine(sb)
+	for _, def := range refStructDefs {
+		this.writeLineFormat(sb,
+			"#include \"%s.h\"",
+			UtilCamelToUnderscore(def.Name))
+	}
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileTableDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"class %s {",
+		tableDef.Name)
+	this.writeLine(sb,
+		"public:")
+
+	for _, def := range tableDef.LocalStructs {
+		this.writeHeaderFileOneStructDecl(sb, def)
+		this.writeEmptyLine(sb)
+	}
+	this.writeTableHeaderFileTableDeclRowClassDecl(sb, tableDef)
+	this.writeEmptyLine(sb)
+
+	this.writeLine(sb,
+		"};")
+}
+
+func (this *CppCodeGenerator) writeTableHeaderFileTableDeclRowClassDecl(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeLine(sb,
+		"    class Row {")
+	this.writeLine(sb,
+		"    public:")
+	this.writeLine(sb,
+		"        Row();")
+	this.writeLine(sb,
+		"        ~Row();")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    public:")
+
+	for _, def := range tableDef.Columns {
+		cppType := this.getTableColumnCppType(def)
+		this.writeLineFormat(sb,
+			"        %s %s;",
+			cppType, def.Name)
+	}
+
+	this.writeLine(sb,
+		"    };")
 }
