@@ -715,6 +715,7 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImpl(
 	this.writeTableSourceFileTableImplRowDestructor(sb, tableDef)
 	this.writeTableSourceFileTableImplConstructor(sb, tableDef)
 	this.writeTableSourceFileTableImplDestructor(sb, tableDef)
+	this.writeTableSourceFileTableImplParseFunc(sb, tableDef)
 }
 
 func (this *CppCodeGenerator) writeTableSourceFileTableImplRowConstructor(
@@ -805,4 +806,206 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplDestructor(
 		"{")
 	this.writeLine(sb,
 		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFunc(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"bool %s::parse(const std::string &text, std::string *error_info)",
+		tableDef.Name)
+	this.writeLine(sb,
+		"{")
+
+	this.writeLine(sb,
+		"    brickred::table::LineReader r(text);")
+	this.writeLine(sb, ""+
+		"    const brickred::table::LineReader::LineBuffer "+
+		"*line_buffer = nullptr;")
+	this.writeLineFormat(sb,
+		"    size_t column_count_req = %d;",
+		len(tableDef.Columns))
+
+	this.writeTableSourceFileTableImplParseFuncReadCommentLine(sb)
+	this.writeTableSourceFileTableImplParseFuncReadNameLine(sb, tableDef)
+
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeTableSourceFileTableImplParseFuncSingleKeyReadDataLine(
+			sb, tableDef)
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    *error_info = \"\";")
+	this.writeLine(sb,
+		"    return true;")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncReadCommentLine(
+	sb *strings.Builder) {
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    // read comment line")
+	this.writeLine(sb,
+		"    line_buffer = r.nextLine();")
+	this.writeLine(sb,
+		"    if (line_buffer == nullptr) {")
+	this.writeLine(sb,
+		"        *error_info = \"comment line is required\";")
+	this.writeLine(sb,
+		"        return false;")
+	this.writeLine(sb,
+		"    }")
+	this.writeLine(sb,
+		"    if (line_buffer->size() != column_count_req) {")
+	this.writeLine(sb,
+		"        *error_info = brickred::table::util::error(")
+	this.writeLine(sb, ""+
+		"            \"comment line column count %zd is invalid, "+
+		"should be %zd\",")
+	this.writeLine(sb,
+		"            line_buffer->size(), column_count_req);")
+	this.writeLine(sb,
+		"        return false;")
+	this.writeLine(sb,
+		"    }")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncReadNameLine(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    // read name line")
+	this.writeLine(sb,
+		"    line_buffer = r.nextLine();")
+	this.writeLine(sb,
+		"    if (line_buffer == nullptr) {")
+	this.writeLine(sb,
+		"        *error_info = \"name line is required\";")
+	this.writeLine(sb,
+		"        return false;")
+	this.writeLine(sb,
+		"    }")
+	this.writeLine(sb,
+		"    if (line_buffer->size() != column_count_req) {")
+	this.writeLine(sb,
+		"        *error_info = brickred::table::util::error(")
+	this.writeLine(sb, ""+
+		"            \"name line column count %zd is invalid, "+
+		"should be %zd\",")
+	this.writeLine(sb,
+		"            line_buffer->size(), column_count_req);")
+	this.writeLine(sb,
+		"        return false;")
+	this.writeLine(sb,
+		"    }")
+	this.writeLine(sb,
+		"    {")
+	this.writeLine(sb,
+		"        size_t col_number = 0;")
+	this.writeEmptyLine(sb)
+	for _, def := range tableDef.Columns {
+		this.writeLineFormat(sb,
+			"        if ((*line_buffer)[col_number++] != \"%s\") {",
+			def.Name)
+		this.writeLine(sb,
+			"            *error_info = brickred::table::util::error(")
+		this.writeLineFormat(sb, ""+
+			"                \"column %%zd should be named as `%s`\", "+
+			"col_number);",
+			def.Name)
+		this.writeLine(sb,
+			"            return false;")
+		this.writeLine(sb,
+			"        }")
+	}
+	this.writeLine(sb,
+		"    }")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSingleKeyReadDataLine(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	keyFormat := ""
+	keyValue := ""
+	if tableDef.TableKey.Type == TableColumnType_Int {
+		keyFormat = "%d"
+		keyValue = fmt.Sprintf("row.%s", tableDef.TableKey.Name)
+	} else if tableDef.TableKey.Type == TableColumnType_String {
+		keyFormat = "%s"
+		keyValue = fmt.Sprintf("row.%s.c_str()", tableDef.TableKey.Name)
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    // read data lines")
+	this.writeLine(sb,
+		"    size_t line_number = 3;")
+	this.writeLine(sb,
+		"    rows_.clear();")
+	this.writeLine(sb,
+		"    row_index_.clear();")
+	this.writeLine(sb,
+		"    for (;;) {")
+	this.writeLine(sb,
+		"        line_buffer = r.nextLine();")
+	this.writeLine(sb,
+		"        if (line_buffer == nullptr) {")
+	this.writeLine(sb,
+		"            break;")
+	this.writeLine(sb,
+		"        }")
+	this.writeLine(sb,
+		"        if (line_buffer->size() != column_count_req) {")
+	this.writeLine(sb,
+		"            *error_info = brickred::table::util::error(")
+	this.writeLine(sb, ""+
+		"                \"line %zd column count %zd is invalid, "+
+		"should be %zd\",")
+	this.writeLine(sb,
+		"                line_number, line_buffer->size(), column_count_req);")
+	this.writeLine(sb,
+		"            return false;")
+	this.writeLine(sb,
+		"        }")
+	this.writeLineFormat(sb,
+		"        if ((*line_buffer)[%d].empty()) {",
+		tableDef.TableKeyColumnIndex)
+	this.writeLine(sb,
+		"            *error_info = brickred::table::util::error(")
+	this.writeLineFormat(sb,
+		"                \"line %%zd key `%s` is empty\", line_number);",
+		tableDef.TableKey.Name)
+	this.writeLine(sb,
+		"            return false;")
+	this.writeLine(sb,
+		"        }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"        Row row;")
+	this.writeLine(sb,
+		"        size_t col_number = 0;")
+	this.writeEmptyLine(sb)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"        if (getRow(row.%s) != nullptr) {",
+		tableDef.TableKey.Name)
+	this.writeLine(sb,
+		"            *error_info = brickred::table::util::error(")
+	this.writeLineFormat(sb, ""+
+		"                \"line %%zd key `%s` value %s is duplicated\", "+
+		"line_number, %s);",
+		tableDef.TableKey.Name, keyFormat, keyValue)
+	this.writeLine(sb,
+		"            return false;")
+	this.writeLine(sb,
+		"        }")
+	this.writeLine(sb,
+		"    }")
 }
