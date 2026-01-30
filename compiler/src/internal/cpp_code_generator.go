@@ -526,6 +526,8 @@ func (this *CppCodeGenerator) writeTableHeaderFileIncludeFileDecl(
 	}
 
 	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"#include <cstddef>")
 	if useCStdIntH {
 		this.writeLine(sb,
 			"#include <cstdint>")
@@ -537,7 +539,9 @@ func (this *CppCodeGenerator) writeTableHeaderFileIncludeFileDecl(
 	this.writeLine(sb,
 		"#include <vector>")
 
-	this.writeEmptyLine(sb)
+	if len(refStructDefs) > 0 {
+		this.writeEmptyLine(sb)
+	}
 	for _, def := range refStructDefs {
 		this.writeLineFormat(sb,
 			"#include \"%s.h\"",
@@ -600,7 +604,7 @@ func (this *CppCodeGenerator) writeTableHeaderFileTableDeclRowClassDecl(
 		this.writeLine(sb,
 			"    using Rows = std::vector<Row>;")
 		this.writeLineFormat(sb,
-			"    using RowIndex = std::unordered_map<%s, const Row *>;",
+			"    using RowIndex = std::unordered_map<%s, size_t>;",
 			this.getTableColumnCppType(tableDef.TableKey))
 	} else if tableDef.TableKeyType == TableKeyType_SetKey {
 		this.writeLine(sb,
@@ -608,7 +612,7 @@ func (this *CppCodeGenerator) writeTableHeaderFileTableDeclRowClassDecl(
 		this.writeLine(sb,
 			"    using RowSets = std::vector<RowSet>;")
 		this.writeLineFormat(sb,
-			"    using RowSetIndex = std::unordered_map<%s, const RowSet *>;",
+			"    using RowSetIndex = std::unordered_map<%s, size_t>;",
 			this.getTableColumnCppType(tableDef.TableKey))
 	}
 }
@@ -687,8 +691,6 @@ func (this *CppCodeGenerator) writeTableSourceFileIncludeFileDecl(
 		UtilCamelToUnderscore(tableDef.Name))
 
 	this.writeEmptyLine(sb)
-	this.writeLine(sb,
-		"#include <cstddef>")
 	if useCStdlibH {
 		this.writeLine(sb,
 			"#include <cstdlib>")
@@ -716,6 +718,11 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImpl(
 	this.writeTableSourceFileTableImplConstructor(sb, tableDef)
 	this.writeTableSourceFileTableImplDestructor(sb, tableDef)
 	this.writeTableSourceFileTableImplParseFunc(sb, tableDef)
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeTableSourceFileTableImplGetRowFunc(sb, tableDef)
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeTableSourceFileTableImplGetRowSetFunc(sb, tableDef)
+	}
 }
 
 func (this *CppCodeGenerator) writeTableSourceFileTableImplRowConstructor(
@@ -834,6 +841,8 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFunc(
 		this.writeTableSourceFileTableImplParseFuncSingleKeyReadDataLine(
 			sb, tableDef)
 	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeTableSourceFileTableImplParseFuncSetKeyReadDataLine(
+			sb, tableDef)
 	}
 
 	this.writeEmptyLine(sb)
@@ -992,6 +1001,7 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSingleKeyRea
 	this.writeLine(sb,
 		"        size_t col_number = 0;")
 	this.writeEmptyLine(sb)
+	this.writeTableSourceFileTableImplParseFuncParseColumns(sb, tableDef)
 	this.writeEmptyLine(sb)
 	this.writeLineFormat(sb,
 		"        if (getRow(row.%s) != nullptr) {",
@@ -1006,6 +1016,248 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSingleKeyRea
 		"            return false;")
 	this.writeLine(sb,
 		"        }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"        rows_.push_back(row);")
+	this.writeLineFormat(sb,
+		"        row_index_.insert(std::make_pair(row.%s, rows_.size() - 1));",
+		tableDef.TableKey.Name)
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"        line_number += 1;")
 	this.writeLine(sb,
 		"    }")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSetKeyReadDataLine(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	keyDefine := "";
+	keyFormat := "";
+	keyValue := "";
+	if tableDef.TableKey.Type == TableColumnType_Int {
+		keyDefine = "int32_t key = ::atoi(key_str->c_str())"
+		keyFormat = "%d"
+		keyValue = fmt.Sprintf("row.%s", tableDef.TableKey.Name)
+	} else if tableDef.TableKey.Type == TableColumnType_String {
+		keyDefine = "std::string key = *key_str"
+		keyFormat = "%s"
+		keyValue = fmt.Sprintf("row.%s.c_str()", tableDef.TableKey.Name)
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    // read data lines")
+	this.writeLine(sb,
+		"    size_t line_number = 3;")
+	this.writeLine(sb,
+		"    std::string last_key;")
+	this.writeLine(sb,
+		"    row_sets_.clear();")
+	this.writeLine(sb,
+		"    row_set_index_.clear();")
+	this.writeLine(sb,
+		"    for (;;) {")
+	this.writeLine(sb,
+		"        line_buffer = r.nextLine();")
+	this.writeLine(sb,
+		"        if (line_buffer == nullptr) {")
+	this.writeLine(sb,
+		"            break;")
+	this.writeLine(sb,
+		"        }")
+	this.writeLine(sb,
+		"        if (line_buffer->size() != column_count_req) {")
+	this.writeLine(sb,
+		"            *error_info = brickred::table::util::error(")
+	this.writeLine(sb, ""+
+		"                \"line %zd column count %zd is invalid, "+
+		"should be %zd\",")
+	this.writeLine(sb,
+		"                line_number, line_buffer->size(), column_count_req);")
+	this.writeLine(sb,
+		"            return false;")
+	this.writeLine(sb,
+		"        }")
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"        const std::string *key_str = &(*line_buffer)[%d];",
+		tableDef.TableKeyColumnIndex)
+	this.writeLine(sb,
+		"        if (key_str->empty()) {")
+	this.writeLine(sb,
+		"            if (last_key.empty() == false) {")
+	this.writeLine(sb,
+		"                key_str = &last_key;")
+	this.writeLine(sb,
+		"            } else {")
+	this.writeLine(sb,
+		"                *error_info = brickred::table::util::error(")
+	this.writeLineFormat(sb,
+		"                    \"line %%zd key `%s` is empty\", line_number);",
+		tableDef.TableKey.Name)
+	this.writeLine(sb,
+		"                return false;")
+	this.writeLine(sb,
+		"            }")
+	this.writeLine(sb,
+		"        }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"        Row row;")
+	this.writeLine(sb,
+		"        size_t col_number = 0;")
+	this.writeEmptyLine(sb)
+	this.writeTableSourceFileTableImplParseFuncParseColumns(sb, tableDef)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"        %s;",
+		keyDefine)
+	this.writeLine(sb,
+		"        if (*key_str != last_key) {")
+	this.writeLine(sb,
+		"            if (getRowSet(key) != nullptr) {")
+	this.writeLine(sb,
+		"                *error_info = brickred::table::util::error(")
+	this.writeLineFormat(sb,
+		"                    \"line %%zd key `%s` value %s is duplicated\",",
+		tableDef.TableKey.Name, keyFormat)
+	this.writeLineFormat(sb,
+		"                    line_number, %s);",
+		keyValue)
+	this.writeLine(sb,
+		"                return false;")
+	this.writeLine(sb,
+		"            }")
+	this.writeLine(sb,
+		"            RowSet &row_set = row_sets_.emplace_back();")
+	this.writeLine(sb,
+		"            row_set.push_back(row);")
+	this.writeLine(sb,
+		"            row_set_index_.insert(std::make_pair(key, row_sets_.size() - 1));")
+	this.writeLine(sb,
+		"            last_key = *key_str;")
+	this.writeLine(sb,
+		"        } else {")
+	this.writeLineFormat(sb,
+		"            row.%s = key;",
+		tableDef.TableKey.Name)
+	this.writeLine(sb,
+		"            RowSet &row_set = row_sets_[row_set_index_[key]];")
+	this.writeLine(sb,
+		"            row_set.push_back(row);")
+	this.writeLine(sb,
+		"        }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"        line_number += 1;")
+	this.writeLine(sb,
+		"    }")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncParseColumns(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	for _, def := range tableDef.Columns {
+		isList := def.Type == TableColumnType_List
+		var checkType TableColumnType
+		if def.Type == TableColumnType_List {
+			checkType = def.ListType
+		} else {
+			checkType = def.Type
+		}
+
+		if checkType == TableColumnType_Int {
+			if isList {
+				this.writeLineFormat(sb, ""+
+					"        brickred::table::util::readColumnIntList("+
+					"(*line_buffer)[col_number++], &row.%s);",
+					def.Name)
+			} else {
+				this.writeLineFormat(sb,
+					"        row.%s = ::atoi((*line_buffer)[col_number++].c_str());",
+					def.Name)
+			}
+		} else if checkType == TableColumnType_String {
+			if isList {
+				this.writeLineFormat(sb, ""+
+					"        brickred::table::util::readColumnStringList("+
+					"(*line_buffer)[col_number++], &row.%s);",
+					def.Name)
+			} else {
+				this.writeLineFormat(sb,
+					"        row.%s = (*line_buffer)[col_number++];",
+					def.Name)
+			}
+		} else if checkType == TableColumnType_Struct {
+			if isList {
+				this.writeLine(sb,
+					"        if (brickred::table::util::readColumnStructList(")
+				this.writeLineFormat(sb, ""+
+					"                (*line_buffer)[col_number++], "+
+					"&row.%s) == false) {",
+					def.Name)
+				this.writeLine(sb,
+					"            *error_info = brickred::table::util::error(")
+				this.writeLineFormat(sb, ""+
+					"                \"line %%zd column `%s` value is invalid\", "+
+					"line_number);",
+					def.Name)
+				this.writeLine(sb,
+					"            return false;")
+				this.writeLine(sb,
+					"        }")
+			} else {
+				this.writeLineFormat(sb, ""+
+					"        if (row.%s.parse("+
+					"(*line_buffer)[col_number++]) == false) {",
+					def.Name)
+				this.writeLine(sb,
+					"            *error_info = brickred::table::util::error(")
+				this.writeLineFormat(sb, ""+
+					"                \"line %%zd column `%s` value is invalid\", "+
+					"line_number);",
+					def.Name)
+				this.writeLine(sb,
+					"            return false;")
+				this.writeLine(sb,
+					"        }")
+			}
+		}
+	}
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplGetRowFunc(
+	sb *strings.Builder, tableDef *TableDef) {
+
+	cppType := this.getTableColumnCppType(tableDef.TableKey)
+	if tableDef.TableKey.Type == TableColumnType_String {
+		cppType = fmt.Sprintf("const %s &", cppType)
+	} else {
+		cppType = fmt.Sprintf("%s ", cppType)
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"const %s::Row *%s::getRow(%skey) const",
+		tableDef.Name, tableDef.Name, cppType)
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"    RowIndex::const_iterator iter = row_index_.find(key);")
+	this.writeLine(sb,
+		"    if (iter == row_index_.end()) {")
+	this.writeLine(sb,
+		"        return nullptr;")
+	this.writeLine(sb,
+		"    }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    return &rows_[iter->second];")
+	this.writeLine(sb,
+		"}")
+}
+
+func (this *CppCodeGenerator) writeTableSourceFileTableImplGetRowSetFunc(
+	sb *strings.Builder, tableDef *TableDef) {
 }
