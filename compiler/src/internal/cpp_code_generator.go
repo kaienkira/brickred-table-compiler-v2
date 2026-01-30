@@ -1032,9 +1032,9 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSingleKeyRea
 func (this *CppCodeGenerator) writeTableSourceFileTableImplParseFuncSetKeyReadDataLine(
 	sb *strings.Builder, tableDef *TableDef) {
 
-	keyDefine := "";
-	keyFormat := "";
-	keyValue := "";
+	keyDefine := ""
+	keyFormat := ""
+	keyValue := ""
 	if tableDef.TableKey.Type == TableColumnType_Int {
 		keyDefine = "int32_t key = ::atoi(key_str->c_str())"
 		keyFormat = "%d"
@@ -1260,4 +1260,31 @@ func (this *CppCodeGenerator) writeTableSourceFileTableImplGetRowFunc(
 
 func (this *CppCodeGenerator) writeTableSourceFileTableImplGetRowSetFunc(
 	sb *strings.Builder, tableDef *TableDef) {
+
+	cppType := this.getTableColumnCppType(tableDef.TableKey)
+	if tableDef.TableKey.Type == TableColumnType_String {
+		cppType = fmt.Sprintf("const %s &", cppType)
+	} else {
+		cppType = fmt.Sprintf("%s ", cppType)
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"const %s::RowSet *%s::getRowSet(%skey) const",
+		tableDef.Name, tableDef.Name, cppType)
+	this.writeLine(sb,
+		"{")
+	this.writeLine(sb,
+		"    RowSetIndex::const_iterator iter = row_set_index_.find(key);")
+	this.writeLine(sb,
+		"    if (iter == row_set_index_.end()) {")
+	this.writeLine(sb,
+		"        return nullptr;")
+	this.writeLine(sb,
+		"    }")
+	this.writeEmptyLine(sb)
+	this.writeLine(sb,
+		"    return &row_sets_[iter->second];")
+	this.writeLine(sb,
+		"}")
 }
