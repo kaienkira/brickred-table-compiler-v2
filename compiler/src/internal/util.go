@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,27 @@ func UtilCheckDirExists(dirPath string) bool {
 	}
 
 	return true
+}
+
+func UtilReadAllTextShared(filePath string) (string, bool) {
+	file, err := UtilOpenFileShared(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr,
+			"error: open file %s failed: %s",
+			filePath, err.Error())
+		return "", false
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr,
+			"error: read file %s failed: %s",
+			filePath, err.Error())
+		return "", false
+	}
+
+	return string(fileBytes), true
 }
 
 func UtilWriteAllText(filePath string, fileContent string) bool {

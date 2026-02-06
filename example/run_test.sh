@@ -19,6 +19,8 @@ if [ $? -ne 0 ]; then exit 1; fi
 # copy files
 cp "$script_path"/../compiler/bin/brickred-table-compiler .
 if [ $? -ne 0 ]; then exit 1; fi
+cp "$script_path"/../compiler/bin/brickred-table-cutter .
+if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/table.xml .
 if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/main.cc .
