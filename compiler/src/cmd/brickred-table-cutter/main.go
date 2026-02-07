@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	. "github.com/kaienkira/brickred-table-compiler-v2/compiler/internal"
 	flag "github.com/spf13/pflag"
@@ -52,4 +53,89 @@ func main() {
 			optDefineFilePath)
 		os.Exit(1)
 	}
+
+	// -- check option input_dir
+	if UtilCheckDirExists(optInputDir) == false {
+		fmt.Fprintf(os.Stderr,
+			"error: can not find input directory `%s`\n",
+			optInputDir)
+		os.Exit(1)
+	}
+
+	// -- check option output_dir
+	if UtilCheckDirExists(optOutputDir) == false {
+		fmt.Fprintf(os.Stderr,
+			"error: can not find output directory `%s`\n",
+			optOutputDir)
+		os.Exit(1)
+	}
+	if UtilGetFullPath(optInputDir) ==
+		UtilGetFullPath(optOutputDir) {
+		fmt.Fprintf(os.Stderr,
+			"error: output directory can not be same as input directory")
+		os.Exit(1)
+	}
+
+	// create parser
+	parser := NewTableParser()
+	if parser.Parse(optDefineFilePath) == false {
+		os.Exit(1)
+	}
+	defer parser.Close()
+
+	if cutTables(parser.Descriptor,
+		optReader, optInputDir, optOutputDir) == false {
+		os.Exit(1)
+	}
+
+	os.Exit(0)
+}
+
+func cutTables(descriptor *TableDescriptor,
+	reader string, inputDir string, outputDir string) bool {
+
+	// check reader
+	if _, ok := descriptor.Readers[reader]; ok == false {
+		fmt.Fprintf(os.Stderr,
+			"error: reader `%s` is not defined\n",
+			reader)
+		return false
+	}
+
+	for _, def := range descriptor.Tables {
+		needCut := false
+		if len(def.Readers) <= 0 {
+			needCut = true
+		} else if _, ok := def.Readers[reader]; ok {
+			needCut = true
+		}
+		if needCut == false {
+			continue
+		}
+		if cutTable(def, reader, inputDir, outputDir) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func cutTable(tableDef *TableDef,
+	reader string, inputDir string, outputDir string) bool {
+
+	filePath := filepath.Join(inputDir, tableDef.FileName)
+	fileContent, ret := UtilReadAllTextShared(filePath)
+	if ret == false {
+		return false
+	}
+
+	lines := strings.Split(fileContent, "\r\n")
+	if lines[len(lines)-1] != "" {
+		fmt.Fprintf(os.Stderr,
+			"error: input file `%s` file line ending is required",
+			tableDef.FileName)
+		return false
+	}
+
+	return true
 }
