@@ -45,7 +45,7 @@ func UtilReadAllTextShared(filePath string) (string, bool) {
 	file, err := UtilOpenFileShared(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
-			"error: open file %s failed: %s",
+			"error: open file %s failed: %s\n",
 			filePath, err.Error())
 		return "", false
 	}
@@ -54,7 +54,7 @@ func UtilReadAllTextShared(filePath string) (string, bool) {
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
-			"error: read file %s failed: %s",
+			"error: read file %s failed: %s\n",
 			filePath, err.Error())
 		return "", false
 	}
@@ -66,7 +66,7 @@ func UtilWriteAllText(filePath string, fileContent string) bool {
 	err := os.WriteFile(filePath, []byte(fileContent), 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
-			"error: write file %s failed: %s",
+			"error: write file %s failed: %s\n",
 			filePath, err.Error())
 		return false
 	}

@@ -1,4 +1,3 @@
-#include <iconv.h>
 #include <cstddef>
 #include <cstdio>
 #include <fstream>
@@ -14,34 +13,6 @@
 
 using namespace server::table;
 
-static int convertEncoding(
-    const char *from, const char *to,
-    char *in_buffer, size_t in_buffer_size,
-    char *out_buffer, size_t out_buffer_size)
-{
-    iconv_t cd;
-
-    cd = iconv_open(to, from);
-    if ((iconv_t)(-1) == cd) {
-        return -1;
-    }
-
-    char *in = in_buffer;
-    char *out = out_buffer;
-    size_t in_size = in_buffer_size;
-    size_t out_size = out_buffer_size;
-
-    size_t ret = iconv(cd, &in, &in_size, &out, &out_size);
-    if ((size_t)-1 == ret) {
-        iconv_close(cd);
-        return -1;
-    }
-
-    iconv_close(cd);
-
-    return out_buffer_size - out_size;
-}
-
 static std::string getTableFileContent(const std::string &file_path)
 {
     std::ifstream fs(file_path.c_str(), std::ios::binary | std::ios::ate);
@@ -56,19 +27,7 @@ static std::string getTableFileContent(const std::string &file_path)
     input_buffer.assign((std::istreambuf_iterator<char>(fs)),
                          std::istreambuf_iterator<char>());
 
-    std::vector<char> output_buffer(input_buffer.size() * 2);
-
-    int size = convertEncoding("UTF-16", "UTF-8",
-        &input_buffer[0], input_buffer.size(),
-        &output_buffer[0], output_buffer.size());
-    if (-1 == size) {
-        ::fprintf(stderr,
-            "convert file %s encoding from utf-16 to utf-8 failed\n",
-            file_path.c_str());
-        return "";
-    }
-
-    return std::string(&output_buffer[0]);
+    return std::string(&input_buffer[0], input_buffer.size());
 }
 
 int main(int argc, char *argv[])

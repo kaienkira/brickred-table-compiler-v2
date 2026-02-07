@@ -17,7 +17,7 @@ func printUsage() {
 		"-f <define_file> "+
 		"-r <reader> "+
 		"-i <input_dir> "+
-		"-o <output_dir>",
+		"-o <output_dir>\n",
 		filepath.Base(os.Args[0]))
 }
 
@@ -72,7 +72,7 @@ func main() {
 	if UtilGetFullPath(optInputDir) ==
 		UtilGetFullPath(optOutputDir) {
 		fmt.Fprintf(os.Stderr,
-			"error: output directory can not be same as input directory")
+			"error: output directory can not be same as input directory\n")
 		os.Exit(1)
 	}
 
@@ -112,7 +112,7 @@ func cutTables(descriptor *TableDescriptor,
 		if needCut == false {
 			continue
 		}
-		if cutTable(def, reader, inputDir, outputDir) {
+		if cutTable(def, reader, inputDir, outputDir) == false {
 			return false
 		}
 	}
@@ -123,17 +123,90 @@ func cutTables(descriptor *TableDescriptor,
 func cutTable(tableDef *TableDef,
 	reader string, inputDir string, outputDir string) bool {
 
-	filePath := filepath.Join(inputDir, tableDef.FileName)
-	fileContent, ret := UtilReadAllTextShared(filePath)
+	// calucate deleted columns
+	deletedColumns := make(map[int]bool)
+	for i, def := range tableDef.Columns {
+		if def == tableDef.TableKey {
+			continue
+		}
+		if len(def.Readers) <= 0 {
+			continue
+		}
+		if _, ok := def.Readers[reader]; ok {
+			continue
+		}
+		deletedColumns[i] = true
+	}
+
+	// read input file
+	inputFilePath := filepath.Join(inputDir, tableDef.FileName)
+	inputFileContent, ret := UtilReadAllTextShared(inputFilePath)
 	if ret == false {
 		return false
 	}
 
-	lines := strings.Split(fileContent, "\r\n")
+	// split lines
+	lines := strings.Split(inputFileContent, "\r\n")
 	if lines[len(lines)-1] != "" {
 		fmt.Fprintf(os.Stderr,
-			"error: input file `%s` file line ending is required",
+			"error: input file `%s` file line ending is required\n",
 			tableDef.FileName)
+		return false
+	}
+
+	lineCount := len(lines) - 1
+	if lineCount < 2 {
+		fmt.Fprintf(os.Stderr,
+			"error: input file `%s` comment line and name line is required\n",
+			tableDef.FileName)
+		return false
+	}
+
+	// split columns
+	lineCols := make([][]string, 0)
+	for i := range lineCount {
+		cols := strings.Split(lines[i], "\t")
+		if len(cols) != len(tableDef.Columns) {
+			fmt.Fprintf(os.Stderr, ""+
+				"error: input file `%s` line %d "+
+				"column count %d is invalid, should be %d\n",
+				tableDef.FileName, i+1,
+				len(cols), len(tableDef.Columns))
+			return false
+		}
+		lineCols = append(lineCols, cols)
+	}
+
+	// check name line
+	for i, def := range tableDef.Columns {
+		if lineCols[1][i] != def.Name {
+			fmt.Fprintf(os.Stderr,
+				"error: input file `%s` column %d should be named as `%s`\n",
+				tableDef.FileName, i+1, def.Name)
+			return false
+		}
+	}
+
+	// cut columns
+	var sb strings.Builder
+	outputCols := make([]string, 0)
+	for i := range lineCount {
+		inputCols := lineCols[i]
+		outputCols := outputCols[:0]
+		for j, col := range inputCols {
+			if _, ok := deletedColumns[j]; ok {
+				continue
+			}
+			outputCols = append(outputCols, col)
+		}
+		sb.WriteString(strings.Join(outputCols, "\t"))
+		sb.WriteString("\r\n")
+	}
+	outputFileContent := sb.String()
+
+	// write output file
+	outputFilePath := filepath.Join(outputDir, tableDef.FileName)
+	if UtilWriteAllText(outputFilePath, outputFileContent) == false {
 		return false
 	}
 
