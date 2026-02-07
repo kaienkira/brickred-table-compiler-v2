@@ -54,8 +54,9 @@ func (this *TableParser) Parse(defineFilePath string) bool {
 	if rootNode == nil ||
 		rootNode.Type != xmlquery.ElementNode ||
 		rootNode.Data != "define" {
-		this.printNodeError(rootNode,
-			"root node must be `define` node")
+		fmt.Fprintf(os.Stderr,
+			"error:%s: root node must be `define` node\n",
+			this.Descriptor.FilePath)
 		return false
 	}
 
