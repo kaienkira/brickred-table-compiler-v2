@@ -23,8 +23,9 @@ func printUsage() {
 		filepath.Base(os.Args[0]))
 }
 
-func main() {
+func run() int {
 	// parse command line options
+	var optHelp bool
 	var optDefineFilePath string
 	var optLanguage string
 	var optReader string
@@ -32,20 +33,28 @@ func main() {
 	var optNewLineType string
 
 	flagSet := flag.NewFlagSet("main", flag.ContinueOnError)
-	flagSet.BoolP("help", "h", false, "")
+	flagSet.BoolVarP(&optHelp, "help", "h", false, "")
 	flagSet.StringVarP(&optDefineFilePath, "-define_file_path", "f", "", "")
 	flagSet.StringVarP(&optLanguage, "-language", "l", "", "")
 	flagSet.StringVarP(&optReader, "-reader", "r", "", "")
 	flagSet.StringVarP(&optOutputDir, "-output_dir", "o", "", "")
 	flagSet.StringVarP(&optNewLineType, "-new_line_type", "n", "", "")
-	flagSet.Parse(os.Args[1:])
+
+	if flagSet.Parse(os.Args[1:]) != nil {
+		printUsage()
+		return 1
+	}
+	if optHelp {
+		printUsage()
+		return 0
+	}
 
 	// check command line options
 	// -- required options
 	if optDefineFilePath == "" ||
 		optLanguage == "" {
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
 	// -- option default value
 	if optOutputDir == "" {
@@ -60,7 +69,7 @@ func main() {
 		fmt.Fprintf(os.Stderr,
 			"error: can not find define file `%s`\n",
 			optDefineFilePath)
-		os.Exit(1)
+		return 1
 	}
 
 	// -- check option language
@@ -69,7 +78,7 @@ func main() {
 		fmt.Fprintf(os.Stderr,
 			"error: language `%s` is not supported\n",
 			optLanguage)
-		os.Exit(1)
+		return 1
 	}
 
 	// -- check option output_dir
@@ -77,7 +86,7 @@ func main() {
 		fmt.Fprintf(os.Stderr,
 			"error: can not find output directory `%s`\n",
 			optOutputDir)
-		os.Exit(1)
+		return 1
 	}
 
 	// -- check option new_line_type
@@ -86,18 +95,18 @@ func main() {
 		fmt.Fprintf(os.Stderr,
 			"error: new_line_type `%s` is invalid\n",
 			optNewLineType)
-		os.Exit(1)
+		return 1
 	}
 
 	// create parser
 	parser := NewTableParser()
 	if parser.Parse(optDefineFilePath) == false {
-		os.Exit(1)
+		return 1
 	}
 	defer parser.Close()
 	if optReader != "" {
 		if parser.FilterByReader(optReader) == false {
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -108,7 +117,7 @@ func main() {
 	} else if optLanguage == "csharp" {
 		generator = NewCSharpCodeGenerator()
 	} else {
-		os.Exit(1)
+		return 1
 	}
 	defer generator.Close()
 
@@ -119,8 +128,12 @@ func main() {
 	}
 	if generator.Generate(parser.Descriptor,
 		optReader, optOutputDir, newLineType) == false {
-		os.Exit(1)
+		return 1
 	}
 
-	os.Exit(0)
+	return 0
+}
+
+func main() {
+	os.Exit(run())
 }
