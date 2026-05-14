@@ -61,4 +61,12 @@ if [ $? -ne 0 ]; then exit 1; fi
 ./cpp_test server_table
 if [ $? -ne 0 ]; then exit 1; fi
 
+# csharp test
+mkdir -p client_table
+if [ $? -ne 0 ]; then exit 1; fi
+./brickred-table-cutter -f table.xml -r client -i . -o client_table
+if [ $? -ne 0 ]; then exit 1; fi
+./brickred-table-compiler -f table.xml -l csharp -r client
+if [ $? -ne 0 ]; then exit 1; fi
+
 exit 0
