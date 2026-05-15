@@ -33,6 +33,14 @@ func (this *CSharpCodeGenerator) Generate(
 		}
 	}
 
+	for _, def := range this.descriptor.Tables {
+		filePath := filepath.Join(outputDir, def.Name+".cs")
+		fileContent := this.generateTableFile(def)
+		if UtilWriteAllText(filePath, fileContent) == false {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -74,6 +82,14 @@ func (this *CSharpCodeGenerator) generateGlobalStructFile(
 	this.writeOneStructDecl(&sb, structDef, indent)
 
 	this.writeNamespaceDeclEnd(&sb)
+
+	return sb.String()
+}
+
+func (this *CSharpCodeGenerator) generateTableFile(
+	tableDef *TableDef) string {
+
+	var sb strings.Builder
 
 	return sb.String()
 }
@@ -199,6 +215,15 @@ func (this *CSharpCodeGenerator) writeOneStructDeclParseFunc(
 					"%s        }",
 					indent)
 			} else if def.Type == StructFieldType_String {
+				this.writeLineFormat(sb,
+					"%s        if (s.NextString(ref this.%s) == false) {",
+					indent, def.Name)
+				this.writeLineFormat(sb,
+					"%s            return false;",
+					indent)
+				this.writeLineFormat(sb,
+					"%s        }",
+					indent)
 			}
 		}
 
