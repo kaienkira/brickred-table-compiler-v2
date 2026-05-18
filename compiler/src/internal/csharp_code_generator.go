@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -70,6 +71,49 @@ func (this *CSharpCodeGenerator) getStructFieldCSharpTypeDefaultValue(
 	return defaultValue
 }
 
+func (this *CSharpCodeGenerator) getTableColumnCSharpType(
+	columnDef *TableColumnDef) string {
+
+	var checkType TableColumnType
+	if columnDef.Type == TableColumnType_List {
+		checkType = columnDef.ListType
+	} else {
+		checkType = columnDef.Type
+	}
+
+	csharpType := ""
+	if checkType == TableColumnType_Int {
+		csharpType = "int"
+	} else if checkType == TableColumnType_String {
+		csharpType = "string"
+	} else if checkType == TableColumnType_Struct {
+		csharpType = columnDef.RefStructDef.Name
+	}
+
+	if columnDef.Type == TableColumnType_List {
+		return fmt.Sprintf("System.Collections.Generic.List<%s>", csharpType)
+	} else {
+		return csharpType
+	}
+}
+
+func (this *CSharpCodeGenerator) getTableColumnCSharpTypeDefaultValue(
+	columnDef *TableColumnDef) string {
+
+	defaultValue := ""
+	if columnDef.Type == TableColumnType_Int {
+		defaultValue = "0"
+	} else if columnDef.Type == TableColumnType_String {
+		defaultValue = "\"\""
+	} else if columnDef.Type == TableColumnType_Struct ||
+		columnDef.Type == TableColumnType_List {
+		defaultValue = fmt.Sprintf("new %s()",
+			this.getTableColumnCSharpType(columnDef))
+	}
+
+	return defaultValue
+}
+
 func (this *CSharpCodeGenerator) generateGlobalStructFile(
 	structDef *StructDef) string {
 
@@ -91,7 +135,23 @@ func (this *CSharpCodeGenerator) generateTableFile(
 
 	var sb strings.Builder
 
+	this.writeDontEditComment(&sb)
+	this.writeNamespaceDeclStart(&sb)
+
+	indent := this.getIndent()
+	this.writeOneTableDecl(&sb, tableDef, indent)
+
+	this.writeNamespaceDeclEnd(&sb)
+
 	return sb.String()
+}
+
+func (this *CSharpCodeGenerator) getIndent() string {
+	if _, ok := this.descriptor.Readers[this.reader]; ok {
+		return "    "
+	} else {
+		return ""
+	}
 }
 
 func (this *CSharpCodeGenerator) writeDontEditComment(
@@ -105,14 +165,6 @@ func (this *CSharpCodeGenerator) writeDontEditComment(
 		" * Do not edit unless you are sure that you know what you are doing.")
 	this.writeLine(sb,
 		" */")
-}
-
-func (this *CSharpCodeGenerator) getIndent() string {
-	if _, ok := this.descriptor.Readers[this.reader]; ok {
-		return "    "
-	} else {
-		return ""
-	}
 }
 
 func (this *CSharpCodeGenerator) writeNamespaceDeclStart(
@@ -242,6 +294,43 @@ func (this *CSharpCodeGenerator) writeOneStructDeclParseFunc(
 			indent)
 	}
 
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeOneTableDecl(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	this.writeLineFormat(sb,
+		"%spublic sealed class %s",
+		indent, tableDef.Name)
+	this.writeLineFormat(sb,
+		"%s{",
+		indent)
+
+	for _, def := range tableDef.LocalStructs {
+		this.writeOneStructDecl(sb, def, indent)
+		this.writeEmptyLine(sb)
+	}
+
+	this.writeOneTableDeclRowClassDecl(sb, tableDef, indent)
+	this.writeEmptyLine(sb)
+
+	this.writeLineFormat(sb,
+		"%s}",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeOneTableDeclRowClassDecl(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	this.writeLineFormat(sb,
+		"%s    public sealed class Row",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
 	this.writeLineFormat(sb,
 		"%s    }",
 		indent)
