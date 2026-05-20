@@ -316,6 +316,9 @@ func (this *CSharpCodeGenerator) writeOneTableDecl(
 
 	this.writeOneTableDeclRowClassDecl(sb, tableDef, indent)
 	this.writeEmptyLine(sb)
+	this.writeOneTableDeclMemberDecl(sb, tableDef, indent)
+	this.writeEmptyLine(sb)
+	this.writeOneTableDeclParseFunc(sb, tableDef, indent)
 
 	this.writeLineFormat(sb,
 		"%s}",
@@ -330,6 +333,87 @@ func (this *CSharpCodeGenerator) writeOneTableDeclRowClassDecl(
 		indent)
 	this.writeLineFormat(sb,
 		"%s    {",
+		indent)
+
+	for _, def := range tableDef.Columns {
+		csharpType := this.getTableColumnCSharpType(def)
+		defaultValue := this.getTableColumnCSharpTypeDefaultValue(def)
+		if len(defaultValue) > 10 {
+			this.writeLineFormat(sb,
+				"%s        public %s %s =",
+				indent, csharpType, def.Name)
+			this.writeLineFormat(sb,
+				"%s            %s;",
+				indent, defaultValue)
+		} else {
+			this.writeLineFormat(sb,
+				"%s        public %s %s = %s;",
+				indent, csharpType, def.Name, defaultValue)
+		}
+	}
+
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeOneTableDeclMemberDecl(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		keyType := this.getTableColumnCSharpType(tableDef.TableKey)
+		this.writeLineFormat(sb,
+			"%s    private System.Collections.Generic.List<Row> rows =",
+			indent)
+		this.writeLineFormat(sb,
+			"%s        new System.Collections.Generic.List<Row>();",
+			indent)
+		this.writeLineFormat(sb,
+			"%s    private System.Collections.Generic.Dictionary<%s, Row> rowIndex =",
+			indent, keyType)
+		this.writeLineFormat(sb,
+			"%s        new System.Collections.Generic.Dictionary<%s, Row>();",
+			indent, keyType)
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		keyType := this.getTableColumnCSharpType(tableDef.TableKey)
+		this.writeLineFormat(sb,
+			"%s    private System.Collections.Generic.List<",
+			indent)
+		this.writeLineFormat(sb,
+			"%s        System.Collections.Generic.List<Row>> rowSets =",
+			indent)
+		this.writeLineFormat(sb,
+			"%s            new System.Collections.Generic.List<",
+			indent)
+		this.writeLineFormat(sb,
+			"%s                System.Collections.Generic.List<Row>>();",
+			indent)
+		this.writeLineFormat(sb,
+			"%s    private System.Collections.Generic.Dictionary<",
+			indent)
+		this.writeLineFormat(sb,
+			"%s        %s, System.Collections.Generic.List<Row>> rowSetIndex =",
+			indent, keyType)
+		this.writeLineFormat(sb,
+			"%s            new System.Collections.Generic.Dictionary<",
+			indent)
+		this.writeLineFormat(sb,
+			"%s                %s, System.Collections.Generic.List<Row>>();",
+			indent, keyType)
+	}
+}
+
+func (this *CSharpCodeGenerator) writeOneTableDeclParseFunc(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	this.writeLineFormat(sb,
+		"%s    public bool Parse(string text, out string errorInfo)",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        return true;",
 		indent)
 	this.writeLineFormat(sb,
 		"%s    }",
