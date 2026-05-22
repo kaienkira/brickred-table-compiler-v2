@@ -413,9 +413,42 @@ func (this *CSharpCodeGenerator) writeOneTableDeclParseFunc(
 		"%s    {",
 		indent)
 	this.writeLineFormat(sb,
+		"%s        Brickred.Table.LineReader r = new Brickred.Table.LineReader(text);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        System.Collections.Generic.List<string> lineBuffer = null;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        int columnCountReq = %d;",
+		indent, len(tableDef.Columns))
+
+	this.writeOneTableDeclParseFuncReadCommentLine(sb, indent)
+
+	this.writeLineFormat(sb,
+		"%s        errorInfo = \"\";",
+		indent)
+	this.writeLineFormat(sb,
 		"%s        return true;",
 		indent)
 	this.writeLineFormat(sb,
 		"%s    }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeOneTableDeclParseFuncReadCommentLine(
+	sb *strings.Builder, indent string) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        // read comment line",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        lineBuffer = r.NextLine();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        if (lineBuffer == null) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
 		indent)
 }
