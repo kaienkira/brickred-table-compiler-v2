@@ -139,7 +139,7 @@ func (this *CSharpCodeGenerator) generateTableFile(
 	this.writeNamespaceDeclStart(&sb)
 
 	indent := this.getIndent()
-	this.writeOneTableDecl(&sb, tableDef, indent)
+	this.writeTableDecl(&sb, tableDef, indent)
 
 	this.writeNamespaceDeclEnd(&sb)
 
@@ -299,7 +299,7 @@ func (this *CSharpCodeGenerator) writeOneStructDeclParseFunc(
 		indent)
 }
 
-func (this *CSharpCodeGenerator) writeOneTableDecl(
+func (this *CSharpCodeGenerator) writeTableDecl(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
 
 	this.writeLineFormat(sb,
@@ -314,18 +314,18 @@ func (this *CSharpCodeGenerator) writeOneTableDecl(
 		this.writeEmptyLine(sb)
 	}
 
-	this.writeOneTableDeclRowClassDecl(sb, tableDef, indent)
+	this.writeTableDeclRowClassDecl(sb, tableDef, indent)
 	this.writeEmptyLine(sb)
-	this.writeOneTableDeclMemberDecl(sb, tableDef, indent)
+	this.writeTableDeclMemberDecl(sb, tableDef, indent)
 	this.writeEmptyLine(sb)
-	this.writeOneTableDeclParseFunc(sb, tableDef, indent)
+	this.writeTableDeclParseFunc(sb, tableDef, indent)
 
 	this.writeLineFormat(sb,
 		"%s}",
 		indent)
 }
 
-func (this *CSharpCodeGenerator) writeOneTableDeclRowClassDecl(
+func (this *CSharpCodeGenerator) writeTableDeclRowClassDecl(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
 
 	this.writeLineFormat(sb,
@@ -357,7 +357,7 @@ func (this *CSharpCodeGenerator) writeOneTableDeclRowClassDecl(
 		indent)
 }
 
-func (this *CSharpCodeGenerator) writeOneTableDeclMemberDecl(
+func (this *CSharpCodeGenerator) writeTableDeclMemberDecl(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
 
 	if tableDef.TableKeyType == TableKeyType_SingleKey {
@@ -403,7 +403,7 @@ func (this *CSharpCodeGenerator) writeOneTableDeclMemberDecl(
 	}
 }
 
-func (this *CSharpCodeGenerator) writeOneTableDeclParseFunc(
+func (this *CSharpCodeGenerator) writeTableDeclParseFunc(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
 
 	this.writeLineFormat(sb,
@@ -422,8 +422,18 @@ func (this *CSharpCodeGenerator) writeOneTableDeclParseFunc(
 		"%s        int columnCountReq = %d;",
 		indent, len(tableDef.Columns))
 
-	this.writeOneTableDeclParseFuncReadCommentLine(sb, indent)
+	this.writeTableDeclParseFuncReadCommentLine(sb, indent)
+	this.writeTableDeclParseFuncReadNameLine(sb, tableDef, indent)
 
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeTableDeclParseFuncSingleKeyReadDataLine(
+			sb, tableDef, indent)
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeTableDeclParseFuncSetKeyReadDataLine(
+			sb, tableDef, indent)
+	}
+
+	this.writeEmptyLine(sb)
 	this.writeLineFormat(sb,
 		"%s        errorInfo = \"\";",
 		indent)
@@ -435,7 +445,7 @@ func (this *CSharpCodeGenerator) writeOneTableDeclParseFunc(
 		indent)
 }
 
-func (this *CSharpCodeGenerator) writeOneTableDeclParseFuncReadCommentLine(
+func (this *CSharpCodeGenerator) writeTableDeclParseFuncReadCommentLine(
 	sb *strings.Builder, indent string) {
 
 	this.writeEmptyLine(sb)
@@ -449,6 +459,225 @@ func (this *CSharpCodeGenerator) writeOneTableDeclParseFuncReadCommentLine(
 		"%s        if (lineBuffer == null) {",
 		indent)
 	this.writeLineFormat(sb,
+		"%s            errorInfo = \"comment line is required\";",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return false;",
+		indent)
+	this.writeLineFormat(sb,
 		"%s        }",
 		indent)
+	this.writeLineFormat(sb,
+		"%s        if (lineBuffer.Count != columnCountReq) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb, ""+
+		"%s                \"comment line column count {0} is invalid, "+
+		"should be {1}\",",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                lineBuffer.Count, columnCountReq);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclParseFuncReadNameLine(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        // read name line",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        lineBuffer = r.NextLine();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        if (lineBuffer == null) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            errorInfo = \"name line is required\";",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        if (lineBuffer.Count != columnCountReq) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb, "" +
+		"%s                \"name line column count {0} is invalid, "+
+		"should be {1}\",",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                lineBuffer.Count, columnCountReq);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            int colNumber = 0;",
+		indent)
+	this.writeEmptyLine(sb)
+	for _, def := range tableDef.Columns {
+		this.writeLineFormat(sb,
+			"%s            if (lineBuffer[colNumber++] != \"%s\") {",
+			indent, def.Name)
+		this.writeLineFormat(sb,
+			"%s                errorInfo = string.Format(",
+			indent)
+		this.writeLineFormat(sb, ""+
+			"%s                    \"column {0} should be named as `%s`\", "+
+			"colNumber);",
+			indent, def.Name)
+		this.writeLineFormat(sb,
+			"%s                return false;",
+			indent)
+		this.writeLineFormat(sb,
+			"%s            }",
+			indent)
+	}
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclParseFuncSingleKeyReadDataLine(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        // read data lines",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        int lineNumber = 3;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        this.rows.Clear();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        for (;;) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            lineBuffer = r.NextLine();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            if (lineBuffer == null) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                break;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            if (lineBuffer.Count != columnCountReq) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb, ""+
+		"%s                    \"line {0} column count {1} is invalid, "+
+		"should be {2}\",",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    lineNumber, lineBuffer.Count, columnCountReq);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            if (lineBuffer[0].Length == 0) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    \"line {0} key `%s` is empty\", lineNumber);",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            Row row = new Row();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            int colNumber = 0;",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeTableDeclParseFuncParseColumns(sb, tableDef, indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclParseFuncSetKeyReadDataLine(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclParseFuncParseColumns(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	for _, def := range tableDef.Columns {
+		isList := def.Type == TableColumnType_List
+		var checkType TableColumnType
+		if def.Type == TableColumnType_List {
+			checkType = def.ListType
+		} else {
+			checkType = def.Type
+		}
+
+		if checkType == TableColumnType_Int {
+			if isList {
+				this.writeLineFormat(sb, ""+
+					"%s            Brickred.Table.Util.ReadColumnIntList("+
+					"lineBuffer[colNumber++], ref row.%s);",
+					indent, def.Name)
+			} else {
+				this.writeLineFormat(sb, ""+
+					"%s            row.%s = Brickred.Table.Util.Atoi("+
+					"lineBuffer[colNumber++]);",
+					indent, def.Name)
+			}
+		} else if checkType == TableColumnType_String {
+			if isList {
+				this.writeLineFormat(sb, ""+
+					"%s            Brickred.Table.Util.ReadColumnStringList("+
+					"lineBuffer[colNumber++], ref row.%s);",
+					indent, def.Name)
+			} else {
+				this.writeLineFormat(sb,
+					"%s            row.%s = lineBuffer[colNumber++];",
+					indent, def.Name)
+			}
+		} else if checkType == TableColumnType_Struct {
+			if isList {
+			} else {
+			}
+		}
+	}
 }
