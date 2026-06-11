@@ -319,6 +319,11 @@ func (this *CSharpCodeGenerator) writeTableDecl(
 	this.writeTableDeclMemberDecl(sb, tableDef, indent)
 	this.writeEmptyLine(sb)
 	this.writeTableDeclParseFunc(sb, tableDef, indent)
+	if tableDef.TableKeyType == TableKeyType_SingleKey {
+		this.writeTableDeclGetRowFunc(sb, tableDef, indent)
+	} else if tableDef.TableKeyType == TableKeyType_SetKey {
+		this.writeTableDeclGetRowSetFunc(sb, tableDef, indent)
+	}
 
 	this.writeLineFormat(sb,
 		"%s}",
@@ -631,6 +636,33 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncSingleKeyReadDataLine(
 	this.writeTableDeclParseFuncParseColumns(sb, tableDef, indent)
 	this.writeEmptyLine(sb)
 	this.writeLineFormat(sb,
+		"%s            if (GetRow(row.%s) != null) {",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb, ""+
+		"%s                    \"line {0} key `%s` value {1} is duplicated\", "+
+		"lineNumber, row.id);",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            this.rows.Add(row);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            this.rowIndex.Add(row.%s, row);",
+		indent, tableDef.TableKey.Name)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            lineNumber += 1;",
+		indent)
+	this.writeLineFormat(sb,
 		"%s        }",
 		indent)
 }
@@ -676,8 +708,84 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncParseColumns(
 			}
 		} else if checkType == TableColumnType_Struct {
 			if isList {
+				this.writeLineFormat(sb,
+					"%s            if (Brickred.Table.Util.ReadColumnStructList(",
+					indent)
+				this.writeLineFormat(sb, ""+
+					"%s                    lineBuffer[colNumber++], ref row.%s) "+
+					"== false) {",
+					indent, def.Name)
+				this.writeLineFormat(sb,
+					"%s                errorInfo = string.Format(",
+					indent)
+				this.writeLineFormat(sb, ""+
+					"%s                    \"line {0} column `%s` value is invalid\", "+
+					"lineNumber);",
+					indent, def.Name)
+				this.writeLineFormat(sb,
+					"%s                return false;",
+					indent)
+				this.writeLineFormat(sb,
+					"%s            }",
+					indent)
 			} else {
+				this.writeLineFormat(sb,
+					"%s            if (row.%s.Parse(lineBuffer[colNumber++]) == false) {",
+					indent, def.Name)
+				this.writeLineFormat(sb,
+					"%s                errorInfo = string.Format(",
+					indent)
+				this.writeLineFormat(sb, ""+
+					"%s                    \"line {0} column `%s` value is invalid\", "+
+					"lineNumber);",
+					indent, def.Name)
+				this.writeLineFormat(sb,
+					"%s                return false;",
+					indent)
+				this.writeLineFormat(sb,
+					"%s                return false;",
+					indent)
+				this.writeLineFormat(sb,
+					"%s            }",
+					indent)
 			}
 		}
 	}
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclGetRowFunc(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	csharpType := this.getTableColumnCSharpType(tableDef.TableKey)
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s    public Row GetRow(%s key)",
+		indent, csharpType)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        Row row = null;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        if (this.rowIndex.TryGetValue(key, out row) == false) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return null;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        return row;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclGetRowSetFunc(
+	sb *strings.Builder, tableDef *TableDef, indent string) {
 }
