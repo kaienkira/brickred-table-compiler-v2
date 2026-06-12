@@ -321,8 +321,10 @@ func (this *CSharpCodeGenerator) writeTableDecl(
 	this.writeTableDeclParseFunc(sb, tableDef, indent)
 	if tableDef.TableKeyType == TableKeyType_SingleKey {
 		this.writeTableDeclGetRowFunc(sb, tableDef, indent)
+		this.writeTableDeclGetRowsFunc(sb, indent)
 	} else if tableDef.TableKeyType == TableKeyType_SetKey {
 		this.writeTableDeclGetRowSetFunc(sb, tableDef, indent)
+		this.writeTableDeclGetRowSetsFunc(sb, indent)
 	}
 
 	this.writeLineFormat(sb,
@@ -520,7 +522,7 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncReadNameLine(
 	this.writeLineFormat(sb,
 		"%s            errorInfo = string.Format(",
 		indent)
-	this.writeLineFormat(sb, "" +
+	this.writeLineFormat(sb, ""+
 		"%s                \"name line column count {0} is invalid, "+
 		"should be {1}\",",
 		indent)
@@ -575,6 +577,9 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncSingleKeyReadDataLine(
 		indent)
 	this.writeLineFormat(sb,
 		"%s        this.rows.Clear();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        this.rowIndex.Clear();",
 		indent)
 	this.writeLineFormat(sb,
 		"%s        for (;;) {",
@@ -669,6 +674,166 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncSingleKeyReadDataLine(
 
 func (this *CSharpCodeGenerator) writeTableDeclParseFuncSetKeyReadDataLine(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	keyDefine := ""
+	if tableDef.TableKey.Type == TableColumnType_Int {
+		keyDefine = "int key = Brickred.Table.Util.Atoi(keyStr)"
+	} else if tableDef.TableKey.Type == TableColumnType_String {
+		keyDefine = "string key = keyStr"
+	}
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        // read data lines",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        int lineNumber = 3;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        string lastKey = \"\";",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        this.rowSets.Clear();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        this.rowSetIndex.Clear();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        for (;;) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            lineBuffer = r.NextLine();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            if (lineBuffer == null) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                break;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            if (lineBuffer.Count != columnCountReq) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb, ""+
+		"%s                    \"line {0} column count {1} is invalid, "+
+		"should be {2}\",",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    lineNumber, lineBuffer.Count, columnCountReq);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            string keyStr = lineBuffer[%d];",
+		indent, tableDef.TableKeyColumnIndex)
+	this.writeLineFormat(sb,
+		"%s            if (keyStr.Length == 0) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                if (lastKey.Length > 0) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    keyStr = lastKey;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                } else {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                        \"line {0} key `%s` is empty\", lineNumber);",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                    return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            Row row = new Row();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            int colNumber = 0;",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeTableDeclParseFuncParseColumns(sb, tableDef, indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            %s;",
+		indent, keyDefine)
+	this.writeLineFormat(sb,
+		"%s            if (keyStr != lastKey) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                if (GetRowSet(key) != null) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    errorInfo = string.Format(",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                        \"line {0} key `%s` value {1} is duplicated\",",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                        lineNumber, row.%s);",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                    return false;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                }",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                System.Collections.Generic.List<Row> rowSet =",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                    new System.Collections.Generic.List<Row>();",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                rowSet.Add(row);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                this.rowSets.Add(rowSet);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                this.rowSetIndex.Add(key, rowSet);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                lastKey = keyStr;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            } else {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s                row.%s = key;",
+		indent, tableDef.TableKey.Name)
+	this.writeLineFormat(sb,
+		"%s                this.rowSetIndex[key].Add(row);",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s            lineNumber += 1;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
 }
 
 func (this *CSharpCodeGenerator) writeTableDeclParseFuncParseColumns(
@@ -743,9 +908,6 @@ func (this *CSharpCodeGenerator) writeTableDeclParseFuncParseColumns(
 					"%s                return false;",
 					indent)
 				this.writeLineFormat(sb,
-					"%s                return false;",
-					indent)
-				this.writeLineFormat(sb,
 					"%s            }",
 					indent)
 			}
@@ -786,6 +948,74 @@ func (this *CSharpCodeGenerator) writeTableDeclGetRowFunc(
 		indent)
 }
 
+func (this *CSharpCodeGenerator) writeTableDeclGetRowsFunc(
+	sb *strings.Builder, indent string) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s    public System.Collections.Generic.List<Row> GetRows()",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        return this.rows;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
+}
+
 func (this *CSharpCodeGenerator) writeTableDeclGetRowSetFunc(
 	sb *strings.Builder, tableDef *TableDef, indent string) {
+
+	csharpType := this.getTableColumnCSharpType(tableDef.TableKey)
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s    public System.Collections.Generic.List<Row> GetRowSet(%s key)",
+		indent, csharpType)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        System.Collections.Generic.List<Row> rowSet = null;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        if (this.rowSetIndex.TryGetValue(key, out rowSet) == false) {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s            return null;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        }",
+		indent)
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s        return rowSet;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
+}
+
+func (this *CSharpCodeGenerator) writeTableDeclGetRowSetsFunc(
+	sb *strings.Builder, indent string) {
+
+	this.writeEmptyLine(sb)
+	this.writeLineFormat(sb,
+		"%s    public System.Collections.Generic.List<",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        System.Collections.Generic.List<Row>> GetRowSets()",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    {",
+		indent)
+	this.writeLineFormat(sb,
+		"%s        return this.rowSets;",
+		indent)
+	this.writeLineFormat(sb,
+		"%s    }",
+		indent)
 }
