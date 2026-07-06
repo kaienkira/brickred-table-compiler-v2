@@ -25,6 +25,8 @@ cp "$script_path"/table.xml .
 if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/main.cc .
 if [ $? -ne 0 ]; then exit 1; fi
+cp "$script_path"/main.cs .
+if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/copy.csv .
 if [ $? -ne 0 ]; then exit 1; fi
 cp "$script_path"/effect.csv .
@@ -46,7 +48,7 @@ if [ $? -ne 0 ]; then exit 1; fi
 ./brickred-table-compiler -f table.xml -l cpp -r server
 if [ $? -ne 0 ]; then exit 1; fi
 g++ -I "$script_path"/../cpp/src \
-    -o "cpp_test" \
+    -o 'cpp_test' \
     main.cc \
     resource_item.cc \
     tbl_copy.cc \
@@ -67,6 +69,21 @@ if [ $? -ne 0 ]; then exit 1; fi
 ./brickred-table-cutter -f table.xml -r client -i . -o client_table
 if [ $? -ne 0 ]; then exit 1; fi
 ./brickred-table-compiler -f table.xml -l csharp -r client
+if [ $? -ne 0 ]; then exit 1; fi
+mcs -out:'csharp_test' \
+    main.cs \
+    ResourceItem.cs \
+    TblCopy.cs \
+    TblEffect.cs \
+    TblItem.cs \
+    TblNpc.cs \
+    TblSkillLevel.cs \
+    "$script_path"/../csharp/src/Brickred.Table/BaseStruct.cs \
+    "$script_path"/../csharp/src/Brickred.Table/ColumnSpliter.cs \
+    "$script_path"/../csharp/src/Brickred.Table/LineReader.cs \
+    "$script_path"/../csharp/src/Brickred.Table/Util.cs
+if [ $? -ne 0 ]; then exit 1; fi
+./csharp_test client_table
 if [ $? -ne 0 ]; then exit 1; fi
 
 exit 0
