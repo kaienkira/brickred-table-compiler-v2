@@ -13,6 +13,22 @@ build-debug:
 	@cd src/cmd/brickred-table-cutter && \
 		go build ${BUILD_DEBUG_FLAGS} -o ../../../bin/brickred-table-cutter
 
+build-linux:
+	@cd src/cmd/brickred-table-compiler && \
+		GOOS=linux arch=amd64 go build $(BUILD_RELEASE_FLAGS) \
+			-o ../../../bin/brickred-table-compiler
+	@cd src/cmd/brickred-table-cutter && \
+		GOOS=linux arch=amd64 go build $(BUILD_RELEASE_FLAGS) \
+			-o ../../../bin/brickred-table-cutter
+
+build-windows:
+	@cd src/cmd/brickred-table-compiler && \
+		GOOS=windows arch=amd64 go build $(BUILD_RELEASE_FLAGS) \
+			-o ../../../bin/brickred-table-compiler.exe
+	@cd src/cmd/brickred-table-cutter && \
+		GOOS=windows arch=amd64 go build $(BUILD_RELEASE_FLAGS) \
+			-o ../../../bin/brickred-table-cutter.exe
+
 fmt:
 	@cd src && go fmt ./...
 
