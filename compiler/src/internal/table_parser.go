@@ -270,23 +270,23 @@ func (this *TableParser) addReaderDef(node *xmlquery.Node) bool {
 
 	// check namespace attr
 	var namespaceStr string
+	var namespaceParts []string
 	{
 		attr := this.getNodeAttr(node, "namespace")
-		if attr == nil {
-			this.printNodeError(node,
-				"`reader` node must contain a `namespace` attribute")
-			return false
-		}
-		namespaceStr = attr.Value
-	}
-
-	// check namespace parts
-	namespaceParts := strings.Split(namespaceStr, ".")
-	for _, part := range namespaceParts {
-		if this.isStrValidVarName(part) == false {
-			this.printNodeError(node,
-				"`reader` node `namespace` attribute is invalid")
-			return false
+		if attr != nil {
+			namespaceStr = attr.Value
+			// check namespace parts
+			namespaceParts = strings.Split(namespaceStr, ".")
+			for _, part := range namespaceParts {
+				if this.isStrValidVarName(part) == false {
+					this.printNodeError(node,
+						"`reader` node `namespace` attribute is invalid")
+					return false
+				}
+			}
+		} else {
+			namespaceStr = ""
+			namespaceParts = make([]string, 0)
 		}
 	}
 
