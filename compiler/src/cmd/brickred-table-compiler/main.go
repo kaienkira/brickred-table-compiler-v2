@@ -100,10 +100,10 @@ func run() int {
 
 	// create parser
 	parser := NewTableParser()
+	defer parser.Close()
 	if parser.Parse(optDefineFilePath) == false {
 		return 1
 	}
-	defer parser.Close()
 	if optReader != "" {
 		if parser.FilterByReader(optReader) == false {
 			return 1

@@ -87,10 +87,10 @@ func run() int {
 
 	// create parser
 	parser := NewTableParser()
+	defer parser.Close()
 	if parser.Parse(optDefineFilePath) == false {
 		return 1
 	}
-	defer parser.Close()
 
 	if cutTables(parser.Descriptor,
 		optReader, optInputDir, optOutputDir) == false {
